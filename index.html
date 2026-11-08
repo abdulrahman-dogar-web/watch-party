@@ -429,12 +429,24 @@
             body: JSON.stringify({ value: state })
           }).catch(function () {});
         }
+        /* All room writes go through ONE queue, in order. Without this,
+           two near-simultaneous writes (e.g. Load's URL write and the
+           "Video link shared" chat write) both GET the same stale state
+           and the last PUT wins — silently erasing the URL, which is
+           exactly why the partner's screen stayed on "NOTHING LOADED YET"
+           while chat claimed the link was shared. */
+        var writeQueue = Promise.resolve();
+        function queueWrite(fn) {
+          var p = writeQueue.then(fn, fn);
+          writeQueue = p.catch(function () {});
+          return p;
+        }
 
         function freshState() {
           return {
             v: 1, createdAt: Date.now(), url: "", mode: "", time: 0,
             playing: false, rate: 1, updatedAt: Date.now(), updatedBy: myId,
-            chat: [], buf: {}, members: {}
+            driver: "", chat: [], buf: {}, members: {}
           };
         }
         function chatKey(m) { return m.ts + "|" + m.n + "|" + m.t; }
@@ -452,18 +464,28 @@
            members so two people writing at once don't wipe each other out,
            then PUT. `mut` edits the merged state in place. */
         function pushState(mut) {
-          return kvGet(myCode).then(function (latest) {
-            var s = latest || roomState || freshState();
-            if (roomState) {
-              s.chat = mergeChat(s.chat, roomState.chat);
-              s.buf = Object.assign({}, s.buf, roomState.buf);
-              s.members = Object.assign({}, s.members, roomState.members);
-            }
-            mut(s);
-            s.updatedAt = Date.now();
-            s.updatedBy = myId;
-            roomState = s;
-            return kvPut(myCode, s);
+          return queueWrite(function () {
+            return kvGet(myCode).then(function (latest) {
+              var s = latest || roomState || freshState();
+              if (roomState) {
+                s.chat = mergeChat(s.chat, roomState.chat);
+                s.buf = Object.assign({}, s.buf, roomState.buf);
+                s.members = Object.assign({}, s.members, roomState.members);
+                /* Keep the local driver's playback fields if the fetched
+                   state is older than our last local action — a stale GET
+                   must never erase a URL or pause we just wrote. */
+                if ((roomState.updatedAt || 0) > (s.updatedAt || 0)) {
+                  s.url = roomState.url; s.mode = roomState.mode;
+                  s.time = roomState.time; s.playing = roomState.playing;
+                  s.rate = roomState.rate; s.driver = roomState.driver;
+                }
+              }
+              mut(s);
+              s.updatedAt = Date.now();
+              s.updatedBy = myId;
+              roomState = s;
+              return kvPut(myCode, s);
+            });
           });
         }
         /* Time write (heartbeat while playing): GET latest first and never
@@ -471,27 +493,34 @@
            forget PUT could resurrect playback seconds after the partner
            had paused it. */
         function pushTime() {
-          if (!roomState) return;
-          kvGet(myCode).then(function (latest) {
-            if (latest && latest.updatedBy && latest.updatedBy !== myId &&
-                latest.playing === false && (latest.updatedAt || 0) > (roomState.updatedAt || 0)) {
-              roomState = latest;
-              if (!video.paused) { applyingRemote = true; video.pause(); setTimeout(function () { applyingRemote = false; }, 350); }
-              return;
-            }
-            var s = latest || roomState;
-            s.chat = mergeChat(s.chat, roomState.chat);
-            s.buf = Object.assign({}, s.buf, roomState.buf);
-            s.members = Object.assign({}, s.members, roomState.members);
-            s.time = video.currentTime || 0;
-            s.playing = !video.paused;
-            s.rate = video.playbackRate || 1;
-            s.updatedAt = Date.now();
-            s.updatedBy = myId;
-            s.members[myId] = { name: myName, seen: Date.now() };
-            roomState = s;
-            kvPut(myCode, s);
-          }).catch(function () {});
+          /* Only the current driver heartbeats the clock. If both sides
+             heartbeat, each claims the time is theirs and nobody ever
+             corrects to the other side — that is why drift grew past 2s
+             and a partner's pause got resurrected. */
+          if (!roomState || roomState.driver !== myId) return;
+          queueWrite(function () {
+            return kvGet(myCode).then(function (latest) {
+              if (latest && latest.driver && latest.driver !== myId &&
+                  latest.playing === false && (latest.updatedAt || 0) > (roomState.updatedAt || 0)) {
+                roomState = latest;
+                if (!video.paused) { applyingRemote = true; video.pause(); setTimeout(function () { applyingRemote = false; }, 350); }
+                return;
+              }
+              var s = latest || roomState;
+              s.chat = mergeChat(s.chat, roomState.chat);
+              s.buf = Object.assign({}, s.buf, roomState.buf);
+              s.members = Object.assign({}, s.members, roomState.members);
+              s.time = video.currentTime || 0;
+              s.playing = !video.paused;
+              s.rate = video.playbackRate || 1;
+              s.driver = myId;
+              s.updatedAt = Date.now();
+              s.updatedBy = myId;
+              s.members[myId] = { name: myName, seen: Date.now() };
+              roomState = s;
+              return kvPut(myCode, s);
+            }).catch(function () {});
+          });
         }
         function touchPresence() {
           lastPresencePut = Date.now();
@@ -610,8 +639,8 @@
             // Video URL changed remotely?
             if (s.url && s.url !== currentUrl) loadUrl(s.url, true);
 
-            // Playback state (only if the update came from someone else).
-            if (s.updatedBy && s.updatedBy !== myId && s.mode === "video" && video.readyState >= 1) {
+            // Playback state (only if someone else is driving playback).
+            if (s.driver && s.driver !== myId && s.mode === "video" && video.readyState >= 1) {
               var exp = expectedTime(s);
               var drift = video.currentTime - exp;
               lastDrift = drift;
@@ -666,7 +695,7 @@
           var code = makeCode();
           var s = freshState();
           s.members[myId] = { name: myName, seen: Date.now() };
-          kvPut(code, s).then(function () {
+          queueWrite(function () { return kvPut(code, s); }).then(function () {
             isHost = true;
             roomState = s;
             enterRoom(code);
@@ -730,6 +759,13 @@
           if (!/^https?:\/\//i.test(url)) url = "https://" + url;
           currentUrl = url;
           $("urlInput").value = url;
+          /* Keep the local cache in step too, so a later stale GET-merge
+             in pushState cannot resurrect an empty URL. */
+          if (roomState) {
+            roomState.url = url;
+            roomState.mode = (isVideoFile(url) || isHls(url)) ? "video" : "browser";
+            if (roomState.mode === "video") { roomState.time = 0; roomState.playing = false; }
+          }
           if (isVideoFile(url) || isHls(url)) {
             currentMode = "video";
             showTab("player");
@@ -764,18 +800,18 @@
         video.addEventListener("play", function () {
           $("playIcon").style.display = "none";
           $("pauseIcon").style.display = "";
-          if (!applyingRemote) pushState(function (s) { s.playing = true; s.time = video.currentTime; s.rate = video.playbackRate; });
+          if (!applyingRemote) pushState(function (s) { s.playing = true; s.time = video.currentTime; s.rate = video.playbackRate; s.driver = myId; });
         });
         video.addEventListener("pause", function () {
           $("playIcon").style.display = "";
           $("pauseIcon").style.display = "none";
-          if (!applyingRemote) pushState(function (s) { s.playing = false; s.time = video.currentTime; });
+          if (!applyingRemote) pushState(function (s) { s.playing = false; s.time = video.currentTime; s.driver = myId; });
         });
         video.addEventListener("seeked", function () {
-          if (!applyingRemote) pushState(function (s) { s.time = video.currentTime; });
+          if (!applyingRemote) pushState(function (s) { s.time = video.currentTime; s.driver = myId; });
         });
         video.addEventListener("ratechange", function () {
-          if (!applyingRemote) pushState(function (s) { s.rate = video.playbackRate; });
+          if (!applyingRemote) pushState(function (s) { s.rate = video.playbackRate; s.driver = myId; });
         });
         video.addEventListener("timeupdate", function () {
           var bar = $("seekBar");
@@ -789,7 +825,7 @@
           /* Metadata just arrived (e.g. guest side after a remote load):
              apply the room's current state now instead of waiting for the
              next poll — seek to where the other side is, play if playing. */
-          if (roomState && roomState.mode === "video" && roomState.updatedBy && roomState.updatedBy !== myId) {
+          if (roomState && roomState.mode === "video" && roomState.driver && roomState.driver !== myId) {
             var exp = expectedTime(roomState);
             if (Math.abs(video.currentTime - exp) > DRIFT_S && isFinite(exp)) {
               try { video.currentTime = exp; } catch (e) {}
@@ -894,6 +930,7 @@
             s.time = 0;
             s.playing = false;
             s.rate = video.playbackRate || 1;
+            s.driver = myId;
           });
           postChat("", (currentMode === "video" ? "Video link shared" : "Page opened in the Shared Browser") + ": " + currentUrl, true, false);
         });
