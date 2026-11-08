@@ -265,7 +265,7 @@
           <input id="urlInput" class="field" type="url" placeholder="Paste a video link (mp4 / webm / .m3u8) or a streaming site link, then press Load" autocomplete="off" spellcheck="false" />
           <button id="loadBtn" class="btn" type="button">Load</button>
         </div>
-        <p class="url-hint">Direct video files and HLS streams play in the synced player. Other site links open in the Shared Browser tab. <button type="button" id="sampleBtn">Load a sample video to test sync</button></p>
+        <p class="url-hint">Direct video files and HLS streams play in the synced player. Other site links open in the Shared Browser tab. <button type="button" id="sampleBtn">Load a sample video to test sync</button> <button type="button" id="cinehdBtn">Open CineHD in Shared Browser</button></p>
 
         <div class="room-grid">
           <div class="stage">
@@ -386,7 +386,15 @@
         var API_BASE = "https://apps-backend-tahqeeq.vercel.app";
         var POLL_MS = 1500;
         var PRESENCE_MS = 10000;
-        var DRIFT_S = 0.8;
+        var DRIFT_S = 0.5;
+        /* Principle: ONE driver only — the room creator. The guest never
+           writes playback state and its controls are locked, so the two
+           sides can never fight over play/pause and resurrect each other.
+           A local action also mutes remote playback for 2s, so a press
+           you just made is never undone by a stale state arriving late. */
+        var lastLocalAction = 0;
+        var lastBufSysAt = 0;
+        var lastPeerBufWarn = {};
 
         var myId = clientId();
         var isHost = false;
@@ -618,12 +626,20 @@
             // Chat: render anything we haven't seen yet.
             (s.chat || []).forEach(renderChatEntry);
 
-            // Buffering warnings from the other side.
+            // Buffering warnings from the other side (debounced: at most
+            // one warning per side every 15s, so a flapping connection
+            // cannot flood the chat with dozens of notices).
             Object.keys(s.buf || {}).forEach(function (id) {
               if (id === myId) return;
               var b = s.buf[id];
-              if (b.on && !prevPeerBuf[b.name]) addSys(b.name + " is buffering — their connection is catching up", true);
-              if (!b.on && prevPeerBuf[b.name]) addSys(b.name + " is back — buffering cleared");
+              var nowMs = Date.now();
+              if (b.on && !prevPeerBuf[b.name]) {
+                if (!lastPeerBufWarn[b.name] || nowMs - lastPeerBufWarn[b.name] > 15000) {
+                  addSys(b.name + " is buffering — their connection is catching up", true);
+                  lastPeerBufWarn[b.name] = nowMs;
+                }
+              }
+              if (!b.on && prevPeerBuf[b.name] && lastPeerBufWarn[b.name]) addSys(b.name + " is back — buffering cleared");
               prevPeerBuf[b.name] = !!b.on;
             });
             updatePeerBufferBanner(s);
@@ -639,8 +655,10 @@
             // Video URL changed remotely?
             if (s.url && s.url !== currentUrl) loadUrl(s.url, true);
 
-            // Playback state (only if someone else is driving playback).
-            if (s.driver && s.driver !== myId && s.mode === "video" && video.readyState >= 1) {
+            // Playback state (only if someone else is driving playback,
+            // and never within 2s of your own press — a stale state must
+            // not undo a play/pause you just made).
+            if (Date.now() - lastLocalAction > 2000 && s.driver && s.driver !== myId && s.mode === "video" && video.readyState >= 1) {
               var exp = expectedTime(s);
               var drift = video.currentTime - exp;
               lastDrift = drift;
@@ -670,7 +688,7 @@
           if (hbTimer) clearInterval(hbTimer);
           hbTimer = setInterval(function () {
             if (currentMode === "video" && !video.paused) pushTime();
-          }, 3000);
+          }, 2000);
         }
 
         /* ================= Room lifecycle ================= */
@@ -680,6 +698,17 @@
           landing.classList.add("hidden");
           room.classList.remove("hidden");
           $("chatWho").textContent = "You are " + myName;
+          /* Only the room creator controls playback. The guest's buttons
+             are locked — it only watches and chats, so it can never fight
+             the host's play/pause. */
+          var guest = !isHost;
+          ["playBtn", "backBtn", "fwdBtn", "seekBar", "speedSel", "loadBtn", "sampleBtn", "cinehdBtn"].forEach(function (id) {
+            var el = $(id);
+            if (el) el.disabled = guest;
+          });
+          if (guest) {
+            $("syncLine").textContent = "Only the room creator controls playback — you follow along in sync. Chat works for both sides.";
+          }
           window.scrollTo(0, 0);
         }
         function getName() {
@@ -800,18 +829,30 @@
         video.addEventListener("play", function () {
           $("playIcon").style.display = "none";
           $("pauseIcon").style.display = "";
-          if (!applyingRemote) pushState(function (s) { s.playing = true; s.time = video.currentTime; s.rate = video.playbackRate; s.driver = myId; });
+          if (applyingRemote || !isHost) return;
+          lastLocalAction = Date.now();
+          if (roomState) roomState.driver = myId;
+          pushState(function (s) { s.playing = true; s.time = video.currentTime; s.rate = video.playbackRate; s.driver = myId; });
         });
         video.addEventListener("pause", function () {
           $("playIcon").style.display = "";
           $("pauseIcon").style.display = "none";
-          if (!applyingRemote) pushState(function (s) { s.playing = false; s.time = video.currentTime; s.driver = myId; });
+          if (applyingRemote || !isHost) return;
+          lastLocalAction = Date.now();
+          if (roomState) roomState.driver = myId;
+          pushState(function (s) { s.playing = false; s.time = video.currentTime; s.driver = myId; });
         });
         video.addEventListener("seeked", function () {
-          if (!applyingRemote) pushState(function (s) { s.time = video.currentTime; s.driver = myId; });
+          if (applyingRemote || !isHost) return;
+          lastLocalAction = Date.now();
+          if (roomState) roomState.driver = myId;
+          pushState(function (s) { s.time = video.currentTime; s.driver = myId; });
         });
         video.addEventListener("ratechange", function () {
-          if (!applyingRemote) pushState(function (s) { s.rate = video.playbackRate; s.driver = myId; });
+          if (applyingRemote || !isHost) return;
+          lastLocalAction = Date.now();
+          if (roomState) roomState.driver = myId;
+          pushState(function (s) { s.rate = video.playbackRate; s.driver = myId; });
         });
         video.addEventListener("timeupdate", function () {
           var bar = $("seekBar");
@@ -878,32 +919,45 @@
           pushState(function (s) {
             s.buf[myId] = { name: myName, on: on, ts: Date.now() };
           });
-          if (on) addSys("You are buffering — your partner has been notified", true);
+          /* One notice per buffering episode, at most every 10s — the
+             old code posted a chat line on every flap. */
+          if (on && Date.now() - lastBufSysAt > 10000) {
+            lastBufSysAt = Date.now();
+            addSys("You are buffering — your partner has been notified", true);
+          }
         }
         video.addEventListener("waiting", function () { setBuffering(true); });
         video.addEventListener("stalled", function () { setBuffering(true); });
         video.addEventListener("playing", function () { setBuffering(false); });
         video.addEventListener("canplay", function () { setBuffering(false); });
 
-        /* ================= Controls ================= */
+        /* ================= Controls =================
+           Host only: the guest's buttons are disabled in enterRoom, and
+           these handlers refuse again, so playback has exactly one driver. */
         $("playBtn").addEventListener("click", function () {
-          if (!currentUrl || currentMode !== "video") return;
+          if (!isHost || !currentUrl || currentMode !== "video") return;
+          lastLocalAction = Date.now();
           if (video.paused) video.play().catch(function () {});
           else video.pause();
         });
         $("backBtn").addEventListener("click", function () {
-          if (currentMode !== "video") return;
+          if (!isHost || currentMode !== "video") return;
+          lastLocalAction = Date.now();
           video.currentTime = Math.max(0, video.currentTime - 10);
         });
         $("fwdBtn").addEventListener("click", function () {
-          if (currentMode !== "video") return;
+          if (!isHost || currentMode !== "video") return;
+          lastLocalAction = Date.now();
           video.currentTime = Math.min(video.duration || 1e9, video.currentTime + 10);
         });
         $("seekBar").addEventListener("change", function () {
-          if (currentMode !== "video" || !video.duration) return;
+          if (!isHost || currentMode !== "video" || !video.duration) return;
+          lastLocalAction = Date.now();
           video.currentTime = (Number(this.value) / 1000) * video.duration;
         });
         $("speedSel").addEventListener("change", function () {
+          if (!isHost) return;
+          lastLocalAction = Date.now();
           video.playbackRate = Number(this.value);
         });
         $("fsBtn").addEventListener("click", function () {
@@ -921,8 +975,10 @@
         });
 
         $("loadBtn").addEventListener("click", function () {
+          if (!isHost) return;
           var url = $("urlInput").value.trim();
           if (!url) return;
+          lastLocalAction = Date.now();
           loadUrl(url, false);
           pushState(function (s) {
             s.url = currentUrl;
@@ -938,9 +994,33 @@
           if (e.key === "Enter") $("loadBtn").click();
         });
         $("sampleBtn").addEventListener("click", function () {
+          if (!isHost) return;
           var u = "https://media.w3.org/2010/05/sintel/trailer.mp4";
           $("urlInput").value = u;
           $("loadBtn").click();
+        });
+        /* CineHD button: opens cinehd.vc in the Shared Browser tab for
+           BOTH sides (the URL itself is synced through the room). If
+           CineHD blocks embedding, the frame stays blank and the note
+           under it says so — then open it in a new tab from the button
+           there. The movie itself still needs a direct video/stream link
+           in the player for true play/pause sync, because a video inside
+           another site's frame cannot be controlled from outside it. */
+        $("cinehdBtn").addEventListener("click", function () {
+          if (!isHost) return;
+          var u = "https://cinehd.vc/";
+          $("urlInput").value = u;
+          loadUrl(u, false);
+          lastLocalAction = Date.now();
+          pushState(function (s) {
+            s.url = currentUrl;
+            s.mode = currentMode;
+            s.time = 0;
+            s.playing = false;
+            s.rate = video.playbackRate || 1;
+            s.driver = myId;
+          });
+          postChat("", "CineHD opened in the Shared Browser: " + currentUrl, true, false);
         });
 
         /* ================= Chat form ================= */
