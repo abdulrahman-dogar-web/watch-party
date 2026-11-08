@@ -469,20 +469,25 @@
         /* ================= Server sync (Vercel Blob KV backend) =================
            No PeerJS, no signalling server. Room state lives in the shared
            backend at https://apps-backend.abdulrahman-dogar.workers.dev
-           (PUT/GET /v1/kv/:key). Every client polls the room key every
-           1.5 seconds and writes the whole room state on every change
-           (play, pause, seek, speed, load, chat, buffering, presence).
-           The video itself still loads on each person's own device from
-           their own internet — only the timing and chat travel through
-           the server. */
+           (PUT/GET /v1/kv/:key). Clients poll the room key every 1 s
+           while playing (3 s when paused) and write the whole room state
+           on every change (play, pause, seek, speed, load, chat,
+           buffering, presence). A PeerJS message, when the channel is
+           up, only triggers an immediate poll. The video itself still
+           loads on each person's own device from their own internet —
+           only the timing and chat travel through the server. */
         var API_BASE = "https://apps-backend.abdulrahman-dogar.workers.dev";
-        /* 3 s poll (was 1.5 s): the shared backend's free tier ran out
-           of operations on 2026-11-08 and every room read/write started
-           failing with 500s. Slower polling burns ~half the ops; the
-           expected-time maths keeps sync tight across the gap. */
+        /* Adaptive poll: 1 s while the movie is playing or anyone is
+           buffering / on hold (a pause has to land in the same second),
+           3 s when paused or idle. Two clients at 1/s is ~7,200 backend
+           reads per hour of playback — inside the free tier. The old
+           fixed 3 s poll is why a host pause took seconds to reach the
+           partner, and why the two sides never sat on the same second. */
         var POLL_MS = 3000;
+        var POLL_FAST_MS = 1000;
         var PRESENCE_MS = 10000;
         var DRIFT_S = 0.5;
+        var currentPollMs = POLL_MS;
         /* Principle: ONE driver only — the room creator. The guest never
            writes playback state and its controls are locked, so the two
            sides can never fight over play/pause and resurrect each other.
@@ -490,6 +495,7 @@
            you just made is never undone by a stale state arriving late. */
         var lastLocalAction = 0;
         var lastBufSysAt = 0;
+        var lastBufRefresh = 0;
         var lastPeerBufWarn = {};
         var lastSeekAt = 0;
 
@@ -534,25 +540,23 @@
             body: JSON.stringify({ value: state })
           }).catch(function () {});
         }
-        /* Room transport: PeerJS data channel FIRST (real-time, no
-           server operations at all), shared-backend KV second. The
-           backend's Blob store started returning 500 on every
-           read/write on 2026-11-08 — the free operations quota was
-           burned by polling — so rooms now sync peer-to-peer and the
-           server is only a backup. poll(), pushState() and pushTime()
-           all go through kvGet/kvPut below, so they work unchanged on
-           either transport. */
+        /* Transport: the shared backend KV is the ONE source of truth.
+           The PeerJS data channel is only a doorbell — when a state
+           message arrives it triggers an immediate poll() instead of
+           waiting for the next tick. (The old code let kvGet() return a
+           stale local cache while peerMode was on, so the host never
+           saw the guest's buffering flags or chat written to KV: the
+           host kept playing while the guest buffered, and the guest's
+           drift corrections fought the host's advancing clock in a
+           loop.) */
         var peerMode = false, lastPeerState = null, roomPeer = null, roomConn = null;
         function kvGet(code) {
-          if (peerMode) return Promise.resolve(lastPeerState);
           return kvGetServer(code);
         }
         function kvPut(code, state) {
           if (peerMode) {
             lastPeerState = state;
             sendPeerState(state);
-            kvPutServer(code, state); /* best-effort backup */
-            return Promise.resolve();
           }
           return kvPutServer(code, state);
         }
@@ -584,7 +588,15 @@
             v: 1, createdAt: Date.now(), url: "", mode: "", time: 0,
             playing: false, rate: 1, updatedAt: Date.now(), updatedBy: myId,
             driver: "", screen: { on: false, by: "" },
-            embedTmdb: "", embedAction: null, chat: [], buf: {}, members: {}
+            embedTmdb: "", embedAction: null, chat: [], buf: {}, members: {},
+            /* timeAt: when `time` was captured. expectedTime() extrapolates
+               from here — NEVER from updatedAt, which every chat / presence /
+               buffering write bumps. (The old code used updatedAt, so a
+               presence heartbeat every 10 s dragged the guest seconds
+               backwards mid-movie and the two sides never sat on the same
+               second.) hold: while anyone buffers, BOTH sides pause at the
+               same held second and resume together from it. */
+            timeAt: Date.now(), hold: { on: false, by: "", time: 0 }
           };
         }
         function chatKey(m) { return m.ts + "|" + m.n + "|" + m.t; }
@@ -616,11 +628,17 @@
                   s.url = roomState.url; s.mode = roomState.mode;
                   s.time = roomState.time; s.playing = roomState.playing;
                   s.rate = roomState.rate; s.driver = roomState.driver;
+                  s.timeAt = roomState.timeAt; s.hold = roomState.hold;
                   s.screen = roomState.screen;
                   s.embedTmdb = roomState.embedTmdb; s.embedAction = roomState.embedAction;
                 }
               }
+              var tBefore = s.time, pBefore = s.playing;
               mut(s);
+              /* timeAt moves ONLY when the playback position or state
+                 moves. Presence / chat / buffering writes must not touch
+                 it, or expectedTime() collapses to a stale second. */
+              if (s.time !== tBefore || s.playing !== pBefore) s.timeAt = Date.now();
               s.updatedAt = Date.now();
               s.updatedBy = myId;
               roomState = s;
@@ -654,6 +672,7 @@
               s.playing = !video.paused;
               s.rate = video.playbackRate || 1;
               s.driver = myId;
+              s.timeAt = Date.now();
               s.updatedAt = Date.now();
               s.updatedBy = myId;
               s.members[myId] = { name: myName, seen: Date.now() };
@@ -716,7 +735,10 @@
         /* ================= Polling: apply remote state ================= */
         function expectedTime(s) {
           if (!s.playing) return s.time || 0;
-          return (s.time || 0) + ((Date.now() - (s.updatedAt || Date.now())) / 1000) * (s.rate || 1);
+          /* Baseline is timeAt (when `time` was captured), never
+             updatedAt — any write bumps updatedAt. */
+          var base = s.timeAt || s.updatedAt || Date.now();
+          return (s.time || 0) + ((Date.now() - base) / 1000) * (s.rate || 1);
         }
         function applyRemote(fn) {
           applyingRemote = true;
@@ -730,7 +752,7 @@
           var b = document.createElement("b");
           b.textContent = "In sync";
           el.appendChild(b);
-          el.appendChild(document.createTextNode(" — last measured drift " + Math.abs(lastDrift).toFixed(2) + "s (auto-corrected when it passes 0.8s). Play, pause, seek and speed changes travel through the server."));
+          el.appendChild(document.createTextNode(" — last measured drift " + Math.abs(lastDrift).toFixed(2) + "s (auto-corrected when it passes 0.5s). Play, pause, seek and speed changes travel through the server."));
         }
         function syncIcons() {
           /* Paused = show the PLAY triangle (press to resume);
@@ -743,7 +765,7 @@
         function updatePeerBufferBanner(s) {
           var names = [];
           Object.keys(s.buf || {}).forEach(function (id) {
-            if (id !== myId && s.buf[id].on) names.push(s.buf[id].name);
+            if (id !== myId && s.buf[id].on && (s.buf[id].ts || 0) > Date.now() - 30000) names.push(s.buf[id].name);
           });
           var el = $("peerBuffer");
           if (names.length) {
@@ -784,6 +806,48 @@
             });
             updatePeerBufferBanner(s);
 
+            // HOLD: if anyone is buffering while the movie plays, the
+            // host pauses BOTH sides at the same second; when everyone
+            // has caught up, both resume together from that second.
+            // (Before this, the host kept playing while the guest
+            // buffered, so the guest fell further and further behind
+            // and every drift correction re-triggered buffering — the
+            // buffer → seek → buffer loop the user saw.)
+            if (isHost && s.mode === "video") {
+              var anyoneBuf = false, bufName = "";
+              Object.keys(s.buf || {}).forEach(function (id) {
+                /* Ignore a flag older than 30 s — a crashed tab never
+                   clears its flag. A live side refreshes its flag every
+                   15 s while it is still buffering (see below). */
+                if (s.buf[id].on && (s.buf[id].ts || 0) > Date.now() - 30000) { anyoneBuf = true; bufName = s.buf[id].name; }
+              });
+              if (s.playing && anyoneBuf && !(s.hold && s.hold.on)) {
+                var ht = video.currentTime || s.time || 0;
+                applyRemote(function () { if (!video.paused) video.pause(); });
+                pushState(function (st) {
+                  st.playing = false; st.time = ht;
+                  st.hold = { on: true, by: bufName || "partner", time: ht };
+                });
+              } else if (s.hold && s.hold.on && !anyoneBuf) {
+                var rt = (typeof s.hold.time === "number") ? s.hold.time : (s.time || 0);
+                pushState(function (st) {
+                  st.playing = true; st.time = rt;
+                  st.hold = { on: false, by: "", time: 0 };
+                });
+                applyRemote(function () {
+                  try { if (Math.abs(video.currentTime - rt) > 0.3) video.currentTime = rt; } catch (e) {}
+                  video.play().catch(function () { showSyncPrompt(); });
+                });
+              }
+            }
+
+            // While I am buffering, keep my flag fresh so the host
+            // never mistakes a long stall for a crashed client.
+            if (localBuffering && Date.now() - lastBufRefresh > 15000) {
+              lastBufRefresh = Date.now();
+              pushState(function (st) { st.buf[myId] = { name: myName, on: true, ts: Date.now() }; });
+            }
+
             // Presence / count. 90s window: a background tab's timers get
             // throttled by the browser, so a 30s window wrongly dropped
             // people to "1 watching" while they were still in the room.
@@ -818,16 +882,23 @@
               if (!s.playing) {
                 applyRemote(function () {
                   if (!video.paused) video.pause();
-                  if (Math.abs(video.currentTime - exp) > 0.3 && (Date.now() - lastSeekAt > 2000 || !video.seeking)) {
+                  /* Never seek while this side is still buffering — the
+                     seek itself re-triggers waiting and the guest spins
+                     in a buffer → seek → buffer loop. Wait for the hold
+                     to lift instead. */
+                  if (!localBuffering && Math.abs(video.currentTime - exp) > 0.3 && (Date.now() - lastSeekAt > 2000 || !video.seeking)) {
                     try { video.currentTime = exp; lastSeekAt = Date.now(); } catch (e) {}
                   }
                   hideSyncPrompt();
                 });
               } else {
-                if (Math.abs(drift) > DRIFT_S && (Date.now() - lastSeekAt > 2000 || !video.seeking)) {
+                /* Same rule while playing: no seek on a starved buffer,
+                   and only seek when we actually have data ahead
+                   (readyState 3+), or the correction itself stalls us. */
+                if (!localBuffering && video.readyState >= 3 && Math.abs(drift) > DRIFT_S && (Date.now() - lastSeekAt > 2000 || !video.seeking)) {
                   applyRemote(function () { try { video.currentTime = exp; lastSeekAt = Date.now(); } catch (e) {} });
                 }
-                if (video.paused) applyRemote(function () { video.play().catch(function () { showSyncPrompt(); }); });
+                if (video.paused && !localBuffering) applyRemote(function () { video.play().catch(function () { showSyncPrompt(); }); });
               }
               if (s.rate && video.playbackRate !== s.rate) {
                 applyRemote(function () {
@@ -841,17 +912,46 @@
 
             // Presence heartbeat (our own member entry), every ~10s.
             if (now - lastPresencePut > PRESENCE_MS) touchPresence();
+
+            // Adaptive poll speed: fast while playing / holding /
+            // buffering, slow when paused or idle.
+            resetPollTimer();
           });
+        }
+
+        /* Adaptive poll: 1 s while playing / holding / buffering, 3 s
+           when paused or idle. The interval is re-checked at the end
+           of every poll(). */
+        function resetPollTimer() {
+          var want = POLL_MS;
+          if (roomState && (roomState.playing || (roomState.hold && roomState.hold.on))) want = POLL_FAST_MS;
+          else if (localBuffering) want = POLL_FAST_MS;
+          else if (roomState) {
+            var anyBuf = false;
+            Object.keys(roomState.buf || {}).forEach(function (id) { if (roomState.buf[id].on) anyBuf = true; });
+            if (anyBuf) want = POLL_FAST_MS;
+          }
+          if (want !== currentPollMs) {
+            currentPollMs = want;
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(poll, currentPollMs);
+          }
         }
 
         function startPolling() {
           if (pollTimer) clearInterval(pollTimer);
+          currentPollMs = POLL_MS;
           pollTimer = setInterval(poll, POLL_MS);
           poll();
           if (hbTimer) clearInterval(hbTimer);
+          /* Safety heartbeat only: the clock is now carried by
+             immediate writes on play / pause / seek / hold, and the
+             guest extrapolates from timeAt. A 3 s heartbeat burned
+             ~1,200 KV writes/hour — over the free tier's 1,000/day in
+             a single movie. 30 s is plenty as a backstop. */
           hbTimer = setInterval(function () {
             if (currentMode === "video" && !video.paused) pushTime();
-          }, 3000);
+          }, 30000);
           /* In peer mode the guest pings every 5 s so the host keeps
              them counted as live; the host answers with state. */
           if (peerPingTimer) clearInterval(peerPingTimer);
@@ -1556,6 +1656,23 @@
           if (localBuffering === on) return;
           localBuffering = on;
           $("bufferOverlay").classList.toggle("show", on);
+          /* Driver fast path: if *I* am driving and I start buffering
+             mid-movie, pause both sides RIGHT NOW at this second —
+             don't wait for the partner's next poll to notice my flag.
+             The poll() hold check is the slow path for the same thing
+             (covers the guest buffering). Recovery is handled in poll():
+             when nobody is buffering any more, the hold lifts and both
+             resume together from the held second. */
+          if (on && isHost && roomState && roomState.playing && !(roomState.hold && roomState.hold.on)) {
+            var ht = video.currentTime || roomState.time || 0;
+            applyRemote(function () { if (!video.paused) video.pause(); });
+            pushState(function (s) {
+              s.buf[myId] = { name: myName, on: true, ts: Date.now() };
+              s.playing = false; s.time = ht;
+              s.hold = { on: true, by: myName, time: ht };
+            });
+            return;
+          }
           pushState(function (s) {
             s.buf[myId] = { name: myName, on: on, ts: Date.now() };
           });
@@ -1631,6 +1748,7 @@
             s.playing = false;
             s.rate = video.playbackRate || 1;
             s.driver = myId;
+            s.hold = { on: false, by: "", time: 0 };
           });
           postChat("", (currentMode === "video" ? "Video link shared" : "Page opened in the Shared Browser") + ": " + currentUrl, true, false);
         });
@@ -1663,6 +1781,7 @@
             s.playing = false;
             s.rate = video.playbackRate || 1;
             s.driver = myId;
+            s.hold = { on: false, by: "", time: 0 };
           });
           postChat("", "CineHD opened in the Shared Browser: " + currentUrl, true, false);
         });
