@@ -1347,7 +1347,12 @@
         function playArchiveFilm(id, title) {
           if (!isHost) return;
           $("movieStatus").textContent = "Loading " + (title || id) + "…";
-          fetch("https://archive.org/metadata/" + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (meta) {
+          /* archive.org metadata can come back empty on a slow/flaky
+             fetch even when the film has a playable file — retry once
+             before declaring there is no video. */
+          var metaTries = 0;
+          function fetchMeta() {
+            fetch("https://archive.org/metadata/" + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (meta) {
             var files = (meta && meta.files) || [];
             /* Some Archive items keep their video as .mov/.m4v/.webm
                instead of .mp4 — accept those too, preferring .mp4. */
@@ -1356,7 +1361,16 @@
               var score = function (n) { return /\.mp4$/i.test(n) ? 2 : /\.m4v$/i.test(n) ? 1 : 0; };
               return score(b.name) - score(a.name);
             });
-            if (!mp4s.length) { $("movieStatus").textContent = "No playable video file found for this film."; return; }
+            if (!mp4s.length) {
+              if (metaTries < 1) {
+                metaTries++;
+                $("movieStatus").textContent = "Still looking for the video file…";
+                setTimeout(fetchMeta, 3000);
+                return;
+              }
+              $("movieStatus").textContent = "No playable video file found for this film.";
+              return;
+            }
             mp4s.sort(function (a, b) {
               var ap = /512kb/i.test(a.name) ? 1 : 0, bp = /512kb/i.test(b.name) ? 1 : 0;
               if (bp !== ap) return bp - ap;
@@ -1375,8 +1389,16 @@
             postChat("", "Movie loaded: " + (title || id), true, false);
             showTab("player");
           }).catch(function () {
+            if (metaTries < 1) {
+              metaTries++;
+              $("movieStatus").textContent = "Still loading this film…";
+              setTimeout(fetchMeta, 3000);
+              return;
+            }
             $("movieStatus").textContent = "Could not load this film. Try another one.";
           });
+          }
+          fetchMeta();
         }
         $("movieSearchBtn").addEventListener("click", function () {
           moviesLoaded = false;
@@ -1869,25 +1891,64 @@
         });
         /* The video file itself failed (bad link, blocked host, no net):
            say so loudly instead of a black screen — the old "Video loaded"
-           chat line was only the link being shared, not the video working. */
-        var videoErrShown = false;
+           chat line was only the link being shared, not the video working.
+           Slow connections are common, and a file that fails once often
+           plays on a retry (the ?v=10 test: the same clip played in a
+           plain tab after ~15 s, but Watch Party gave up at once). So
+           retry the load up to 3 times, 3 s apart, and only then show the
+           permanent failure — with a Retry button. Never auto-play on a
+           retry: the room state decides whether playback starts. */
+        var videoErrShown = false, videoLoadTries = 0, videoRetryTimer = null;
+        function retryVideoLoad() {
+          try {
+            if (isHls(currentUrl) && hls) { hls.loadSource(currentUrl); try { hls.startLoad(); } catch (e) {} }
+            else video.load();
+          } catch (e) {}
+        }
         video.addEventListener("error", function () {
-          var el = $("emptyState");
-          el.style.display = "flex";
-          el.innerHTML = "";
-          var b = document.createElement("span");
-          b.className = "big";
-          b.textContent = "VIDEO COULD NOT LOAD";
-          var s = document.createElement("span");
-          s.textContent = "This link did not play on your device (blocked host, dead link or slow connection). Try the sample video again, or paste another direct .mp4 / .m3u8 link.";
-          el.appendChild(b);
-          el.appendChild(s);
+          if (currentMode !== "video" || !currentUrl) return;
+          if (videoLoadTries < 3) {
+            videoLoadTries++;
+            var el = $("emptyState");
+            el.style.display = "flex";
+            el.innerHTML = "";
+            var b = document.createElement("span");
+            b.className = "big";
+            b.textContent = "LOADING SLOWLY…";
+            var s = document.createElement("span");
+            s.textContent = "The video is taking a while to start (attempt " + videoLoadTries + " of 3) — retrying automatically.";
+            el.appendChild(b);
+            el.appendChild(s);
+            clearTimeout(videoRetryTimer);
+            videoRetryTimer = setTimeout(retryVideoLoad, 3000);
+            return;
+          }
+          var el2 = $("emptyState");
+          el2.style.display = "flex";
+          el2.innerHTML = "";
+          var b2 = document.createElement("span");
+          b2.className = "big";
+          b2.textContent = "VIDEO COULD NOT LOAD";
+          var s2 = document.createElement("span");
+          s2.textContent = "This link did not play on your device (blocked host, dead link or slow connection). Try the sample video again, or paste another direct .mp4 / .m3u8 link.";
+          var rb = document.createElement("button");
+          rb.className = "btn";
+          rb.type = "button";
+          rb.textContent = "Retry video";
+          rb.addEventListener("click", function () {
+            videoLoadTries = 0; videoErrShown = false;
+            el2.style.display = "none";
+            retryVideoLoad();
+          });
+          el2.appendChild(b2);
+          el2.appendChild(s2);
+          el2.appendChild(rb);
           if (!videoErrShown) {
             videoErrShown = true;
             addSys("Video failed to load on your side — the link may be blocked or dead. Try another link.", true);
           }
         });
-        video.addEventListener("canplay", function () { videoErrShown = false; });
+        video.addEventListener("canplay", function () { videoErrShown = false; videoLoadTries = 0; });
         /* Sync prompt: when the host presses Play, the guest's browser
            usually blocks auto-play with sound until the guest taps
            something. So instead of failing silently, the guest gets a
