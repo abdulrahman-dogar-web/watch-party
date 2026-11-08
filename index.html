@@ -365,6 +365,15 @@
                 </div>
                 <p class="url-hint" id="movieStatus">Loading popular films…</p>
                 <div id="movieResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
+                <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
+                <p style="margin:0 0 12px;color:var(--ink-2);font-size:14px"><b style="color:var(--ink)">New movies &amp; shows (TMDB)</b> — search any recent film, pick it, and the same player opens on both sides. The player is a free embed (VidSrc &amp; co.), so play/pause inside it cannot be driven from outside: the host uses the Play/Pause buttons in the Shared Browser tab and the other side gets a pop-up to press the same button.</p>
+                <div class="url-bar" style="margin-top:0">
+                  <input id="tmdbSearch" class="field" type="text" placeholder="Search new movies, e.g. Dune, Avatar, Interstellar…" autocomplete="off" />
+                  <button id="tmdbSearchBtn" class="btn" type="button">Search</button>
+                  <button id="tmdbPopularBtn" class="btn ghost" type="button">Popular now</button>
+                </div>
+                <p class="url-hint" id="tmdbStatus"></p>
+                <div id="tmdbResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
               </div>
             </div>
 
@@ -380,6 +389,23 @@
                   CineHD does not allow its pages inside another website, so it cannot show in this frame — verified on both sides. To watch it together, use the Live Screen tab: the host taps "Share my screen", plays CineHD on their own screen, and you watch that same screen live. Or tap below to open the same CineHD page in a new tab on your side — the room keeps the link in sync, so you both open the same movie. For synced play/pause, paste the movie's direct video link (.mp4 / .m3u8) into the player above.
                   <br /><br />
                   <button class="btn" id="cinehdOpenBtn" type="button">Open CineHD in a new tab</button>
+                </div>
+                <div class="browser-note" id="embedServers" style="display:none;flex-wrap:wrap">
+                  <span style="flex-basis:100%">Movie servers — if one does not load, try another. Same film, same room:</span>
+                  <button class="btn small" data-server="vidsrc" type="button">VidSrc</button>
+                  <button class="btn small ghost" data-server="vidsrc2" type="button">VidSrc 2</button>
+                  <button class="btn small ghost" data-server="wave" type="button">EmbedWave</button>
+                  <button class="btn small ghost" data-server="vidsrc3" type="button">VidSrc 3</button>
+                  <button class="btn small ghost" data-server="2embed" type="button">2Embed</button>
+                  <button class="btn small ghost" data-server="vidlink" type="button">Vidlink</button>
+                  <button class="btn small ghost" data-server="multi" type="button">MultiEmbed</button>
+                </div>
+                <div class="browser-note" id="embedActions" style="display:none;flex-wrap:wrap">
+                  <span style="flex-basis:100%">Host controls — the player inside the frame cannot be driven from outside, so these send a pop-up to your partner instead:</span>
+                  <button class="btn small" id="embedPlayBtn" type="button">▶ Play</button>
+                  <button class="btn small" id="embedPauseBtn" type="button">⏸ Pause</button>
+                  <button class="btn small ghost" id="embedBackBtn" type="button">⏪ Back 10s</button>
+                  <button class="btn small ghost" id="embedFwdBtn" type="button">⏩ Fwd 10s</button>
                 </div>
                 <div class="browser-note">
                   <span>If this area stays blank, the site blocks embedding (X-Frame-Options) — that's the site's rule, not a bug. Open it in a new tab and use the same link on both sides; the video player tab still syncs direct links.</span>
@@ -404,6 +430,17 @@
     </section>
 
     <footer>© 2026 Mr. Abdul Rahman Dogar</footer>
+
+    <!-- Pop-up for embed-player actions: the frame's player cannot be
+         driven from outside, so when the host taps Play/Pause/Seek the
+         guest gets this full-screen prompt instead. -->
+    <div id="embedPrompt" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.82);align-items:center;justify-content:center;padding:20px">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:420px;text-align:center">
+        <div id="embedPromptText" style="font-size:19px;font-weight:700;line-height:1.4">HOST NE PAUSE DABAYA HAI</div>
+        <p style="color:var(--ink-2);font-size:14px;line-height:1.5">Apne player me bhi wahi dabao, taake dono aik hi scene par rahein.</p>
+        <button class="btn" id="embedPromptBtn" type="button">Theek hai, kar diya</button>
+      </div>
+    </div>
 
     <script>
       (function () {
@@ -439,7 +476,11 @@
            their own internet — only the timing and chat travel through
            the server. */
         var API_BASE = "https://apps-backend-tahqeeq.vercel.app";
-        var POLL_MS = 1500;
+        /* 3 s poll (was 1.5 s): the shared backend's free tier ran out
+           of operations on 2026-11-08 and every room read/write started
+           failing with 500s. Slower polling burns ~half the ops; the
+           expected-time maths keeps sync tight across the gap. */
+        var POLL_MS = 3000;
         var PRESENCE_MS = 10000;
         var DRIFT_S = 0.5;
         /* Principle: ONE driver only — the room creator. The guest never
@@ -476,7 +517,7 @@
 
         function kvKey(code) { return "wp:" + code; }
 
-        function kvGet(code) {
+        function kvGetServer(code) {
           return fetch(API_BASE + "/v1/kv/" + encodeURIComponent(kvKey(code)), { cache: "no-store" })
             .then(function (r) {
               if (r.status === 404) return null;
@@ -486,13 +527,45 @@
             .then(function (j) { return j ? j.value : null; })
             .catch(function () { return null; });
         }
-        function kvPut(code, state) {
+        function kvPutServer(code, state) {
           return fetch(API_BASE + "/v1/kv/" + encodeURIComponent(kvKey(code)), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ value: state })
           }).catch(function () {});
         }
+        /* Room transport: PeerJS data channel FIRST (real-time, no
+           server operations at all), shared-backend KV second. The
+           backend's Blob store started returning 500 on every
+           read/write on 2026-11-08 — the free operations quota was
+           burned by polling — so rooms now sync peer-to-peer and the
+           server is only a backup. poll(), pushState() and pushTime()
+           all go through kvGet/kvPut below, so they work unchanged on
+           either transport. */
+        var peerMode = false, lastPeerState = null, roomPeer = null, roomConn = null;
+        function kvGet(code) {
+          if (peerMode) return Promise.resolve(lastPeerState);
+          return kvGetServer(code);
+        }
+        function kvPut(code, state) {
+          if (peerMode) {
+            lastPeerState = state;
+            sendPeerState(state);
+            kvPutServer(code, state); /* best-effort backup */
+            return Promise.resolve();
+          }
+          return kvPutServer(code, state);
+        }
+        function sendPeerState(state) {
+          /* Keep lastPeerState in step: poll() reads through kvGet(),
+             so a stale copy here would overwrite the host's own newer
+             state (e.g. a just-joined guest's member entry). */
+          lastPeerState = state;
+          if (roomConn && roomConn.open) {
+            try { roomConn.send({ t: "state", state: state }); } catch (e) {}
+          }
+        }
+        function roomPeerId(code) { return "wp-room-" + code; }
         /* All room writes go through ONE queue, in order. Without this,
            two near-simultaneous writes (e.g. Load's URL write and the
            "Video link shared" chat write) both GET the same stale state
@@ -510,7 +583,8 @@
           return {
             v: 1, createdAt: Date.now(), url: "", mode: "", time: 0,
             playing: false, rate: 1, updatedAt: Date.now(), updatedBy: myId,
-            driver: "", screen: { on: false, by: "" }, chat: [], buf: {}, members: {}
+            driver: "", screen: { on: false, by: "" },
+            embedTmdb: "", embedAction: null, chat: [], buf: {}, members: {}
           };
         }
         function chatKey(m) { return m.ts + "|" + m.n + "|" + m.t; }
@@ -543,6 +617,7 @@
                   s.time = roomState.time; s.playing = roomState.playing;
                   s.rate = roomState.rate; s.driver = roomState.driver;
                   s.screen = roomState.screen;
+                  s.embedTmdb = roomState.embedTmdb; s.embedAction = roomState.embedAction;
                 }
               }
               mut(s);
@@ -722,6 +797,9 @@
             // Live screen share state.
             maybeJoinScreen(s);
 
+            // Embed-player action from the host → pop-up for the guest.
+            maybeShowEmbedPrompt(s);
+
             // Video URL changed remotely?
             if (s.url && s.url !== currentUrl) loadUrl(s.url, true);
 
@@ -773,7 +851,56 @@
           if (hbTimer) clearInterval(hbTimer);
           hbTimer = setInterval(function () {
             if (currentMode === "video" && !video.paused) pushTime();
-          }, 2000);
+          }, 3000);
+          /* In peer mode the guest pings every 5 s so the host keeps
+             them counted as live; the host answers with state. */
+          if (peerPingTimer) clearInterval(peerPingTimer);
+          peerPingTimer = setInterval(function () {
+            if (peerMode && roomConn && roomConn.open && !isHost) {
+              try { roomConn.send({ t: "ping", id: myId }); } catch (e) {}
+            }
+          }, 5000);
+        }
+        var peerPingTimer = null;
+
+        /* ================= PeerJS room sync (host side) ============== */
+        function startHostPeer(code) {
+          if (typeof Peer === "undefined") return;
+          try {
+            roomPeer = new Peer(roomPeerId(code), { config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+            roomPeer.on("connection", function (conn) {
+              roomConn = conn;
+              conn.on("open", function () {
+                peerMode = true;
+                sendPeerState(roomState);
+              });
+              conn.on("data", function (msg) { onHostPeerMsg(msg); });
+              conn.on("close", function () { if (roomConn === conn) { roomConn = null; peerMode = false; } });
+              conn.on("error", function () {});
+            });
+            roomPeer.on("error", function () {});
+          } catch (e) {}
+        }
+        function onHostPeerMsg(msg) {
+          if (!msg || !roomState) return;
+          if ((msg.t === "hello" || msg.t === "ping") && msg.id) {
+            roomState.members[msg.id] = { name: msg.name || (roomState.members[msg.id] && roomState.members[msg.id].name) || "Guest", seen: Date.now() };
+            roomState.updatedAt = Date.now();
+            sendPeerState(roomState);
+            poll();
+            return;
+          }
+          if (msg.t === "state" && msg.state) {
+            /* Guest's write (chat / presence / buffering): merge its
+               chat, buffering flags and members into the host's state
+               and broadcast the merged result back. */
+            roomState.chat = mergeChat(roomState.chat, msg.state.chat);
+            roomState.buf = Object.assign({}, roomState.buf, msg.state.buf);
+            roomState.members = Object.assign({}, roomState.members, msg.state.members);
+            roomState.updatedAt = Date.now();
+            sendPeerState(roomState);
+            poll();
+          }
         }
 
         /* ================= Live screen share (PeerJS/WebRTC) ============
@@ -940,7 +1067,13 @@
           $("movieStatus").textContent = "Loading " + (title || id) + "…";
           fetch("https://archive.org/metadata/" + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (meta) {
             var files = (meta && meta.files) || [];
-            var mp4s = files.filter(function (f) { return /\.mp4$/i.test(f.name || ""); });
+            /* Some Archive items keep their video as .mov/.m4v/.webm
+               instead of .mp4 — accept those too, preferring .mp4. */
+            var mp4s = files.filter(function (f) { return /\.(mp4|m4v|mov|webm)$/i.test(f.name || ""); });
+            mp4s.sort(function (a, b) {
+              var score = function (n) { return /\.mp4$/i.test(n) ? 2 : /\.m4v$/i.test(n) ? 1 : 0; };
+              return score(b.name) - score(a.name);
+            });
             if (!mp4s.length) { $("movieStatus").textContent = "No playable video file found for this film."; return; }
             mp4s.sort(function (a, b) {
               var ap = /512kb/i.test(a.name) ? 1 : 0, bp = /512kb/i.test(b.name) ? 1 : 0;
@@ -968,6 +1101,146 @@
         });
         $("movieSearch").addEventListener("keydown", function (e) {
           if (e.key === "Enter") $("movieSearchBtn").click();
+        });
+
+        /* ================= TMDB search (new movies) =====================
+           Free TMDB key, filled in once the account is created. Search
+           and Popular run against api.themoviedb.org; posters come from
+           image.tmdb.org. Picking a title hands its TMDB id to
+           playEmbedMovie() above. */
+        var TMDB_API_KEY = "PASTE_TMDB_KEY_HERE";
+        function tmdbFetch(path, statusText) {
+          var st = $("tmdbStatus");
+          if (!TMDB_API_KEY || TMDB_API_KEY === "PASTE_TMDB_KEY_HERE") {
+            st.textContent = "TMDB key is being set up — the free key is on its way, try again in a bit.";
+            return;
+          }
+          st.textContent = statusText;
+          fetch("https://api.themoviedb.org/3" + path + (path.indexOf("?") === -1 ? "?" : "&") + "api_key=" + TMDB_API_KEY + "&language=en-US")
+            .then(function (r) { return r.json(); }).then(function (j) {
+              var box = $("tmdbResults");
+              box.innerHTML = "";
+              var list = (j && j.results) || [];
+              if (!list.length) { st.textContent = "No titles found — try another search."; return; }
+              st.textContent = list.length + " titles found.";
+              list.slice(0, 12).forEach(function (m) {
+                var card = document.createElement("div");
+                card.style.cssText = "background:var(--panel-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column";
+                var img = document.createElement("img");
+                img.src = m.poster_path ? ("https://image.tmdb.org/t/p/w342" + m.poster_path) : "https://archive.org/services/img/" + "charlie_chaplin_film_fest";
+                img.alt = m.title || m.name || "";
+                img.loading = "lazy";
+                img.style.cssText = "width:100%;aspect-ratio:2/3;object-fit:cover;background:#000";
+                var body = document.createElement("div");
+                body.style.cssText = "padding:10px;display:flex;flex-direction:column;gap:6px;flex:1";
+                var t = document.createElement("b");
+                t.style.cssText = "font-size:14px;line-height:1.3";
+                t.textContent = m.title || m.name || "";
+                var y = document.createElement("span");
+                y.style.cssText = "font-size:12px;color:var(--ink-3)";
+                y.textContent = (m.release_date || m.first_air_date || "").slice(0, 4) + (m.vote_average ? ("  ★ " + m.vote_average) : "");
+                var btn = document.createElement("button");
+                btn.className = "btn small";
+                btn.type = "button";
+                btn.textContent = isHost ? "Play together" : "Host picks the film";
+                btn.disabled = !isHost;
+                btn.addEventListener("click", function () { playEmbedMovie(m.id, m.title || m.name); });
+                body.appendChild(t); body.appendChild(y); body.appendChild(btn);
+                card.appendChild(img); card.appendChild(body);
+                box.appendChild(card);
+              });
+            }).catch(function () {
+              st.textContent = "Could not reach TMDB. Check your connection and try again.";
+            });
+        }
+        $("tmdbSearchBtn").addEventListener("click", function () {
+          var q = $("tmdbSearch").value.trim();
+          if (q) tmdbFetch("/search/movie?query=" + encodeURIComponent(q), "Searching TMDB…");
+        });
+        $("tmdbSearch").addEventListener("keydown", function (e) {
+          if (e.key === "Enter") $("tmdbSearchBtn").click();
+        });
+        $("tmdbPopularBtn").addEventListener("click", function () {
+          tmdbFetch("/movie/popular", "Loading popular titles…");
+        });
+
+        /* ================= Embed movie servers (TMDB + VidSrc & co.) ====
+           CineHD gives no API key, so the room uses the same pieces
+           CineHD itself is built from: TMDB for search/posters, and
+           free embed players (no key needed) addressed by TMDB id.
+           Seven servers, same film — if one does not load, tap another.
+           The frame's player cannot be driven from outside, so the host
+           sends an action instead and the guest gets a pop-up telling
+           them to press the same button in their own player. */
+        var EMBED_SERVERS = {
+          vidsrc:  function (id) { return "https://vidsrc.in/embed/movie/" + id; },
+          vidsrc2: function (id) { return "https://embed.vidsrc.pk/movie/" + id; },
+          wave:    function (id) { return "https://embedwave.cc/embed/movie/" + id; },
+          vidsrc3: function (id) { return "https://vid-src.top/embed/movie/" + id; },
+          "2embed": function (id) { return "https://www.2embed.cc/embed/" + id; },
+          vidlink: function (id) { return "https://vidlink.pro/movie/" + id; },
+          multi:   function (id) { return "https://multiembed.mov/?video_id=" + id + "&tmdb=1"; }
+        };
+        function embedUrl(server, tmdbId) {
+          var fn = EMBED_SERVERS[server] || EMBED_SERVERS.vidsrc;
+          return fn(tmdbId);
+        }
+        function playEmbedMovie(tmdbId, title) {
+          if (!isHost) return;
+          var url = embedUrl("vidsrc", tmdbId);
+          if (roomState) { roomState.embedTmdb = String(tmdbId); }
+          $("urlInput").value = url;
+          loadUrl(url, false);
+          pushState(function (s) {
+            s.url = currentUrl; s.mode = currentMode; s.embedTmdb = String(tmdbId);
+          });
+          postChat("", "Movie loaded: " + (title || tmdbId) + " — press Play in the player on your side", true, false);
+          showTab("browser");
+        }
+        /* Server switch buttons — host only; the new URL syncs to the
+           guest through the normal room state. */
+        Array.prototype.forEach.call(document.querySelectorAll("#embedServers [data-server]"), function (btn) {
+          btn.addEventListener("click", function () {
+            if (!isHost) return;
+            var id = roomState && roomState.embedTmdb;
+            if (!id) return;
+            var url = embedUrl(btn.getAttribute("data-server"), id);
+            $("urlInput").value = url;
+            loadUrl(url, false);
+            pushState(function (s) { s.url = currentUrl; s.mode = currentMode; });
+          });
+        });
+        /* Host embed-action buttons → room state; guest poll shows the
+           pop-up (see maybeShowEmbedPrompt in poll). */
+        var EMBED_ACTION_LABELS = {
+          play: "HOST NE PLAY DABAYA HAI",
+          pause: "HOST NE PAUSE DABAYA HAI",
+          back: "HOST NE 10 SECOND PEECHE KIYA HAI",
+          fwd: "HOST NE 10 SECOND AAGE KIYA HAI"
+        };
+        function sendEmbedAction(type) {
+          if (!isHost) return;
+          pushState(function (s) {
+            s.embedAction = { type: type, by: myName, at: Date.now(), id: myId + "-" + Date.now() };
+            if (roomState) roomState.embedAction = s.embedAction;
+          });
+        }
+        $("embedPlayBtn").addEventListener("click", function () { sendEmbedAction("play"); });
+        $("embedPauseBtn").addEventListener("click", function () { sendEmbedAction("pause"); });
+        $("embedBackBtn").addEventListener("click", function () { sendEmbedAction("back"); });
+        $("embedFwdBtn").addEventListener("click", function () { sendEmbedAction("fwd"); });
+        var lastEmbedActionId = "";
+        function maybeShowEmbedPrompt(s) {
+          var a = s.embedAction;
+          if (!a || !a.id || a.id === lastEmbedActionId) return;
+          lastEmbedActionId = a.id;
+          if (isHost) return; /* the host sent it */
+          $("embedPromptText").textContent = EMBED_ACTION_LABELS[a.type] || "HOST NE ACTION LIYA HAI";
+          var p = $("embedPrompt");
+          p.style.display = "flex";
+        }
+        $("embedPromptBtn").addEventListener("click", function () {
+          $("embedPrompt").style.display = "none";
         });
 
         /* ================= Room lifecycle ================= */
@@ -1012,6 +1285,7 @@
             postChat("", "Room created. Share the code " + code + " with your partner — they enter it on the home screen to join.", true, false);
             lastPresencePut = Date.now();
             startPolling();
+            startHostPeer(code);
             btn.disabled = false;
             btn.textContent = "Create Room";
           }).catch(function () {
@@ -1026,13 +1300,9 @@
           btn.disabled = true;
           btn.textContent = "Joining…";
           myName = getName();
-          kvGet(code).then(function (s) {
-            if (!s) {
-              btn.disabled = false;
-              btn.textContent = "Join Room";
-              $("landErr").textContent = "Room not found. Check the code — and make sure the host still has the room open.";
-              return;
-            }
+          var done = false, fallbackStarted = false;
+          function enterAsGuest(s) {
+            if (done) return; done = true;
             isHost = false;
             roomState = s;
             enterRoom(code);
@@ -1044,11 +1314,61 @@
             startPolling();
             btn.disabled = false;
             btn.textContent = "Join Room";
-          }).catch(function () {
+          }
+          function fail(msg) {
+            if (done) return; done = true;
             btn.disabled = false;
             btn.textContent = "Join Room";
-            $("landErr").textContent = "Could not reach the server. Check your connection and try again.";
-          });
+            $("landErr").textContent = msg;
+          }
+          /* Server fallback (used when the peer channel cannot reach
+             the host): the old KV check. */
+          function fallbackKv() {
+            if (done || fallbackStarted) return;
+            fallbackStarted = true;
+            peerMode = false;
+            kvGetServer(code).then(function (s) {
+              if (!s) { fail("Room not found. Check the code — and make sure the host still has the room open."); return; }
+              enterAsGuest(s);
+            }).catch(function () {
+              fail("Could not reach the server. Check your connection and try again.");
+            });
+          }
+          /* Try the peer channel first: real-time, no server needed.
+             If it cannot reach the host within 8 s, fall back to the
+             server check above. */
+          if (typeof Peer === "undefined") { fallbackKv(); return; }
+          try {
+            roomPeer = new Peer({ config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+            roomPeer.on("open", function () {
+              var conn = roomPeer.connect(roomPeerId(code), { reliable: true });
+              roomConn = conn;
+              var opened = false;
+              conn.on("open", function () {
+                opened = true;
+                peerMode = true;
+                try { conn.send({ t: "hello", id: myId, name: myName }); } catch (e) {}
+                /* If the host never sends state, the room is not really
+                   open — fall back to the server check. */
+                setTimeout(function () {
+                  if (!done && !roomState) { peerMode = false; fallbackKv(); }
+                }, 5000);
+              });
+              conn.on("data", function (msg) {
+                if (msg && msg.t === "state" && msg.state) {
+                  lastPeerState = msg.state;
+                  if (!roomState) enterAsGuest(msg.state);
+                  else poll();
+                }
+              });
+              conn.on("close", function () { peerMode = false; });
+              conn.on("error", function () {});
+              setTimeout(function () {
+                if (!opened && !done) { try { conn.close(); } catch (e) {} fallbackKv(); }
+              }, 8000);
+            });
+            roomPeer.on("error", function () { fallbackKv(); });
+          } catch (e) { fallbackKv(); }
         }
 
         /* ================= Video loading ================= */
@@ -1112,10 +1432,18 @@
               f.classList.add("hidden");
               f.removeAttribute("src");
               $("cinehdNote").classList.remove("hidden");
+              $("embedServers").style.display = "none";
+              $("embedActions").style.display = "none";
             } else {
               $("cinehdNote").classList.add("hidden");
               f.classList.remove("hidden");
               f.src = url;
+              /* Movie embed: show the server list and the host's
+                 action buttons (host only — the guest just watches
+                 the same embed and answers the pop-ups). */
+              var isEmbed = !!(roomState && roomState.embedTmdb);
+              $("embedServers").style.display = (isEmbed && isHost) ? "flex" : "none";
+              $("embedActions").style.display = (isEmbed && isHost) ? "flex" : "none";
             }
           }
         }
