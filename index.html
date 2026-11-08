@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
         <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
       :root {
         --bg: #0a0a0c;
@@ -280,6 +281,8 @@
             <div class="tabs">
               <button class="tab active" id="tabPlayer" type="button">Video Player</button>
               <button class="tab" id="tabBrowser" type="button">Shared Browser</button>
+              <button class="tab" id="tabScreen" type="button">Live Screen <span id="screenDot" class="dot" style="display:none"></span></button>
+              <button class="tab" id="tabMovies" type="button">Movies</button>
             </div>
 
             <div id="panePlayer">
@@ -334,6 +337,37 @@
               <div class="peer-buffer" id="peerBuffer"></div>
             </div>
 
+            <div id="paneScreen" class="hidden">
+              <div class="player-shell">
+                <div class="video-wrap">
+                  <video id="screenVideo" autoplay playsinline></video>
+                  <div class="empty-state" id="screenEmpty">
+                    <span class="big">NO SCREEN SHARED YET</span>
+                    <span>The room creator can share their screen — whatever they play on their own device (including CineHD) appears here live for both of you, with sound where the browser allows it.</span>
+                  </div>
+                </div>
+                <div class="controls">
+                  <div class="btn-row">
+                    <button class="btn" id="shareScreenBtn" type="button">Share my screen</button>
+                    <button class="btn ghost" id="stopShareBtn" type="button" disabled>Stop sharing</button>
+                    <span class="sync-line" id="screenStatus" style="margin-top:0">Screen sharing is the way to watch CineHD together: the host plays it on their own screen, the partner watches that same screen live.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="paneMovies" class="hidden">
+              <div class="browser-shell" style="padding:16px">
+                <p style="margin:0 0 12px;color:var(--ink-2);font-size:14px">Free public-domain films from the Internet Archive — search, pick one, and it plays on <b style="color:var(--ink)">both screens in sync</b>. No other site needed. New Hollywood releases are not here: they are copyrighted and cannot be streamed legally from this site.</p>
+                <div class="url-bar" style="margin-top:0">
+                  <input id="movieSearch" class="field" type="text" placeholder="Search movies, e.g. Chaplin, Dracula, Sherlock…" autocomplete="off" />
+                  <button id="movieSearchBtn" class="btn" type="button">Search</button>
+                </div>
+                <p class="url-hint" id="movieStatus">Loading popular films…</p>
+                <div id="movieResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
+              </div>
+            </div>
+
             <div id="paneBrowser" class="hidden">
               <div class="browser-shell">
                 <div class="browser-empty" id="browserEmpty">
@@ -343,7 +377,7 @@
                 <iframe id="browserFrame" class="browser-frame hidden" title="Shared browser" referrerpolicy="no-referrer"></iframe>
                 <div id="cinehdNote" class="browser-empty hidden">
                   <span class="big">CINEHD BLOCKS EMBEDDING</span>
-                  CineHD does not allow its pages inside another website, so it cannot show in this frame — verified on both sides. Tap below to open the same CineHD page in a new tab on your side. The room keeps the CineHD link in sync, so you both open the same movie. For synced play/pause, paste the movie's direct video link (.mp4 / .m3u8) into the player above.
+                  CineHD does not allow its pages inside another website, so it cannot show in this frame — verified on both sides. To watch it together, use the Live Screen tab: the host taps "Share my screen", plays CineHD on their own screen, and you watch that same screen live. Or tap below to open the same CineHD page in a new tab on your side — the room keeps the link in sync, so you both open the same movie. For synced play/pause, paste the movie's direct video link (.mp4 / .m3u8) into the player above.
                   <br /><br />
                   <button class="btn" id="cinehdOpenBtn" type="button">Open CineHD in a new tab</button>
                 </div>
@@ -476,7 +510,7 @@
           return {
             v: 1, createdAt: Date.now(), url: "", mode: "", time: 0,
             playing: false, rate: 1, updatedAt: Date.now(), updatedBy: myId,
-            driver: "", chat: [], buf: {}, members: {}
+            driver: "", screen: { on: false, by: "" }, chat: [], buf: {}, members: {}
           };
         }
         function chatKey(m) { return m.ts + "|" + m.n + "|" + m.t; }
@@ -508,6 +542,7 @@
                   s.url = roomState.url; s.mode = roomState.mode;
                   s.time = roomState.time; s.playing = roomState.playing;
                   s.rate = roomState.rate; s.driver = roomState.driver;
+                  s.screen = roomState.screen;
                 }
               }
               mut(s);
@@ -623,9 +658,12 @@
           el.appendChild(document.createTextNode(" — last measured drift " + Math.abs(lastDrift).toFixed(2) + "s (auto-corrected when it passes 0.8s). Play, pause, seek and speed changes travel through the server."));
         }
         function syncIcons() {
+          /* Paused = show the PLAY triangle (press to resume);
+             playing = show the PAUSE bars. (Was inverted before, so
+             the guest kept showing || while paused.) */
           var paused = video.paused;
-          $("playIcon").style.display = paused ? "none" : "";
-          $("pauseIcon").style.display = paused ? "" : "none";
+          $("playIcon").style.display = paused ? "" : "none";
+          $("pauseIcon").style.display = paused ? "none" : "";
         }
         function updatePeerBufferBanner(s) {
           var names = [];
@@ -681,6 +719,9 @@
             if (live.length > 1) setStatus("on", "Connected");
             else if (isHost) setStatus("wait", "Waiting for your partner — share the code");
 
+            // Live screen share state.
+            maybeJoinScreen(s);
+
             // Video URL changed remotely?
             if (s.url && s.url !== currentUrl) loadUrl(s.url, true);
 
@@ -735,6 +776,200 @@
           }, 2000);
         }
 
+        /* ================= Live screen share (PeerJS/WebRTC) ============
+           The jugaar for sites that refuse embedding (CineHD): the host
+           shares their own screen, the partner watches that exact screen
+           live — same picture, same sound, host in control. No server
+           in the middle carries the video; it goes peer to peer. The
+           room state only carries "screen on/off" so the guest knows
+           when to connect. */
+        var screenPeer = null, screenCall = null, screenStream = null;
+        var screenSharing = false;
+        function screenPeerId() { return "wp-screen-" + myCode; }
+        function ensureScreenPeer() {
+          if (screenPeer || typeof Peer === "undefined") return screenPeer;
+          /* Direct peer-to-peer with a public STUN server only (no relay
+             server in the middle when the two devices can reach each
+             other directly) — that is the lowest-latency path available. */
+          screenPeer = new Peer(screenPeerId(), { config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+          screenPeer.on("call", function (call) {
+            if (screenStream) call.answer(screenStream);
+            else call.close();
+          });
+          screenPeer.on("error", function () {});
+          return screenPeer;
+        }
+        function setScreenState(on) {
+          pushState(function (s) {
+            s.screen = { on: !!on, by: on ? myName : "" };
+            if (roomState) roomState.screen = s.screen;
+          });
+        }
+        $("shareScreenBtn").addEventListener("click", function () {
+          if (!isHost) return;
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            $("screenStatus").textContent = "Your browser does not support screen sharing. Try Chrome on a computer, or share from the other side.";
+            return;
+          }
+          /* 720p / 30fps, motion hint: the lowest-lag settings for a
+             moving movie. Higher resolution only adds encoding delay
+             and stutter on a weak connection. */
+          navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: true }).then(function (stream) {
+            screenStream = stream;
+            try { stream.getVideoTracks().forEach(function (t) { t.contentHint = "motion"; }); } catch (e) {}
+            screenSharing = true;
+            ensureScreenPeer();
+            $("screenEmpty").style.display = "none";
+            var v = $("screenVideo");
+            v.srcObject = stream;
+            v.muted = true;
+            v.play().catch(function () {});
+            $("shareScreenBtn").disabled = true;
+            $("stopShareBtn").disabled = false;
+            $("screenStatus").textContent = "You are sharing your screen — your partner can watch it live in the Live Screen tab.";
+            setScreenState(true);
+            postChat("", myName + " started sharing their screen", true, false);
+            stream.getVideoTracks()[0].addEventListener("ended", stopScreenShare);
+          }).catch(function () {
+            $("screenStatus").textContent = "Screen sharing was not allowed. Allow it in the browser prompt and try again.";
+          });
+        });
+        function stopScreenShare() {
+          if (screenStream) { screenStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} }); screenStream = null; }
+          if (screenPeer) { try { screenPeer.destroy(); } catch (e) {} screenPeer = null; }
+          screenSharing = false;
+          $("screenVideo").srcObject = null;
+          $("screenEmpty").style.display = "flex";
+          $("shareScreenBtn").disabled = !isHost;
+          $("stopShareBtn").disabled = true;
+          $("screenStatus").textContent = "Screen sharing stopped.";
+          setScreenState(false);
+        }
+        $("stopShareBtn").addEventListener("click", stopScreenShare);
+        /* Guest side: when the room says a screen is live, call the
+           host's screen peer and show the stream. */
+        function maybeJoinScreen(s) {
+          var on = !!(s.screen && s.screen.on);
+          $("screenDot").style.display = on ? "" : "none";
+          $("screenDot").className = "dot" + (on ? " on" : "");
+          if (isHost || typeof Peer === "undefined") return;
+          if (on && !screenCall) {
+            var peer = new Peer({ config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+            peer.on("open", function () {
+              screenCall = peer.call(screenPeerId(), new MediaStream());
+              if (!screenCall) return;
+              screenCall.on("stream", function (stream) {
+                var v = $("screenVideo");
+                v.srcObject = stream;
+                v.muted = false;
+                v.play().catch(function () {});
+                $("screenEmpty").style.display = "none";
+                $("screenStatus").textContent = (s.screen.by || "Your partner") + " is sharing their screen — you are watching it live.";
+              });
+              screenCall.on("close", function () { screenCall = null; $("screenVideo").srcObject = null; $("screenEmpty").style.display = "flex"; });
+            });
+            peer.on("error", function () {});
+          }
+          if (!on && screenCall) {
+            try { screenCall.close(); } catch (e) {}
+            screenCall = null;
+            $("screenVideo").srcObject = null;
+            $("screenEmpty").style.display = "flex";
+            $("screenStatus").textContent = "Screen sharing stopped.";
+          }
+        }
+
+        /* ================= Movies catalog (Internet Archive) ==========
+           Our own built-in movie library, so no other site is needed:
+           free public-domain feature films from archive.org. Search
+           runs against its public API; picking a film fetches its file
+           list, takes the best .mp4, and loads it into the synced
+           player for both sides. Host only — the guest just watches. */
+        var moviesLoaded = false;
+        function iaSearchUrl(q) {
+          var base = "https://archive.org/advancedsearch.php?q=";
+          var query = q
+            ? "mediatype:movies AND collection:(feature_films) AND title:(" + q.replace(/[^\w\s]/g, " ") + ")"
+            : "mediatype:movies AND collection:(feature_films)";
+          return base + encodeURIComponent(query) +
+            "&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=12&output=json";
+        }
+        function loadMovies(q) {
+          if (q === "" && moviesLoaded) return;
+          var box = $("movieResults");
+          var st = $("movieStatus");
+          st.textContent = q ? "Searching…" : "Loading popular films…";
+          fetch(iaSearchUrl(q)).then(function (r) { return r.json(); }).then(function (j) {
+            var docs = (j.response && j.response.docs) || [];
+            box.innerHTML = "";
+            if (!docs.length) { st.textContent = "No films found — try another search."; return; }
+            st.textContent = q ? docs.length + " films found." : "Most-watched public-domain films. Pick one — it plays on both screens in sync.";
+            docs.forEach(function (d) {
+              var card = document.createElement("div");
+              card.style.cssText = "background:var(--panel-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column";
+              var img = document.createElement("img");
+              img.src = "https://archive.org/services/img/" + d.identifier;
+              img.alt = d.title || "";
+              img.loading = "lazy";
+              img.style.cssText = "width:100%;aspect-ratio:2/3;object-fit:cover;background:#000";
+              var body = document.createElement("div");
+              body.style.cssText = "padding:10px;display:flex;flex-direction:column;gap:6px;flex:1";
+              var t = document.createElement("b");
+              t.style.cssText = "font-size:14px;line-height:1.3";
+              t.textContent = d.title || d.identifier;
+              var y = document.createElement("span");
+              y.style.cssText = "font-size:12px;color:var(--ink-3)";
+              y.textContent = d.year || "";
+              var btn = document.createElement("button");
+              btn.className = "btn small";
+              btn.type = "button";
+              btn.textContent = isHost ? "Play together" : "Host picks the film";
+              btn.disabled = !isHost;
+              btn.addEventListener("click", function () { playArchiveFilm(d.identifier, d.title); });
+              body.appendChild(t); body.appendChild(y); body.appendChild(btn);
+              card.appendChild(img); card.appendChild(body);
+              box.appendChild(card);
+            });
+            moviesLoaded = true;
+          }).catch(function () {
+            st.textContent = "Could not reach the movie library. Check your connection and try again.";
+          });
+        }
+        function playArchiveFilm(id, title) {
+          if (!isHost) return;
+          $("movieStatus").textContent = "Loading " + (title || id) + "…";
+          fetch("https://archive.org/metadata/" + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (meta) {
+            var files = (meta && meta.files) || [];
+            var mp4s = files.filter(function (f) { return /\.mp4$/i.test(f.name || ""); });
+            if (!mp4s.length) { $("movieStatus").textContent = "No playable video file found for this film."; return; }
+            mp4s.sort(function (a, b) {
+              var ap = /512kb/i.test(a.name) ? 1 : 0, bp = /512kb/i.test(b.name) ? 1 : 0;
+              if (bp !== ap) return bp - ap;
+              return (b.size || 0) - (a.size || 0);
+            });
+            var file = mp4s[0].name;
+            var url = "https://archive.org/download/" + id + "/" + encodeURIComponent(file);
+            $("urlInput").value = url;
+            loadUrl(url, false);
+            lastLocalAction = Date.now();
+            pushState(function (s) {
+              s.url = currentUrl; s.mode = currentMode; s.time = 0;
+              s.playing = false; s.rate = video.playbackRate || 1; s.driver = myId;
+            });
+            postChat("", "Movie loaded: " + (title || id), true, false);
+            showTab("player");
+          }).catch(function () {
+            $("movieStatus").textContent = "Could not load this film. Try another one.";
+          });
+        }
+        $("movieSearchBtn").addEventListener("click", function () {
+          moviesLoaded = false;
+          loadMovies($("movieSearch").value.trim());
+        });
+        $("movieSearch").addEventListener("keydown", function (e) {
+          if (e.key === "Enter") $("movieSearchBtn").click();
+        });
+
         /* ================= Room lifecycle ================= */
         function enterRoom(code) {
           myCode = code;
@@ -746,7 +981,7 @@
              are locked — it only watches and chats, so it can never fight
              the host's play/pause. */
           var guest = !isHost;
-          ["playBtn", "backBtn", "fwdBtn", "seekBar", "speedSel", "loadBtn", "sampleBtn", "cinehdBtn"].forEach(function (id) {
+          ["playBtn", "backBtn", "fwdBtn", "seekBar", "speedSel", "loadBtn", "sampleBtn", "cinehdBtn", "shareScreenBtn"].forEach(function (id) {
             var el = $(id);
             if (el) el.disabled = guest;
           });
@@ -820,8 +1055,13 @@
         function showTab(which) {
           $("tabPlayer").classList.toggle("active", which === "player");
           $("tabBrowser").classList.toggle("active", which === "browser");
+          $("tabScreen").classList.toggle("active", which === "screen");
+          $("tabMovies").classList.toggle("active", which === "movies");
           $("panePlayer").classList.toggle("hidden", which !== "player");
           $("paneBrowser").classList.toggle("hidden", which !== "browser");
+          $("paneScreen").classList.toggle("hidden", which !== "screen");
+          $("paneMovies").classList.toggle("hidden", which !== "movies");
+          if (which === "movies") loadMovies("");
         }
         function destroyHls() {
           if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
@@ -1041,6 +1281,8 @@
 
         $("tabPlayer").addEventListener("click", function () { showTab("player"); });
         $("tabBrowser").addEventListener("click", function () { showTab("browser"); });
+        $("tabScreen").addEventListener("click", function () { showTab("screen"); });
+        $("tabMovies").addEventListener("click", function () { showTab("movies"); });
         $("openTabBtn").addEventListener("click", function () {
           if (browserUrl) window.open(browserUrl, "_blank", "noopener");
         });
