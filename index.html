@@ -1504,7 +1504,12 @@
             if (i >= lines.length) return;
             var parts = lines[i].split("-->");
             if (parts.length < 2) return;
-            var start = parseVttTime(parts[0]), end = parseVttTime(parts[1].split(" ")[0]);
+            /* parseVttTime trims and parseFloat ignores trailing
+               settings ("line:90%"), so pass the raw end part — do
+               NOT split it on space first (it starts with one, so
+               [0] would be an empty string and every cue would be
+               dropped; that bug shipped in ?v=12). */
+            var start = parseVttTime(parts[0]), end = parseVttTime(parts[1]);
             var txt = lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "");
             if (txt && end > start) cues.push({ start: start, end: end, text: txt });
           });
