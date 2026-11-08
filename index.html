@@ -143,6 +143,13 @@
         background: rgba(0,0,0,.45); color: var(--ink); font-weight: 700; font-size: 15px; gap: 10px;
       }
       .buffer-overlay.show { display: flex; }
+      .sync-prompt {
+        position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+        background: rgba(0,0,0,.72); z-index: 5; text-align: center; padding: 24px;
+      }
+      .sync-prompt.show { display: flex; }
+      .sync-prompt-box { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--ink-2); }
+      .sync-prompt-box .big { font-family: "Bebas Neue", sans-serif; font-size: 30px; letter-spacing: .05em; color: var(--ink); }
       .spinner { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex: none; }
       @keyframes spin { to { transform: rotate(360deg); } }
       .peer-buffer {
@@ -165,6 +172,7 @@
       .ctl.main { width: 62px; height: 62px; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 50%; }
       .ctl.main svg { width: 28px; height: 28px; }
       .ctl:active { transform: scale(.96); }
+      .ctl:disabled { opacity: .45; cursor: not-allowed; }
       .speed-sel { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; font-size: 15px; font-weight: 700; height: 52px; }
       .sync-line { color: var(--ink-3); font-size: 13px; margin-top: 10px; }
       .sync-line b { color: var(--green); font-weight: 700; }
@@ -283,6 +291,13 @@
                     <span>Paste a direct video or stream link above and press Load.<br />It will start on everyone's screen at the same time.</span>
                   </div>
                   <div class="buffer-overlay" id="bufferOverlay"><span class="spinner"></span> Buffering on your side…</div>
+                  <div class="sync-prompt" id="syncPrompt">
+                    <div class="sync-prompt-box">
+                      <span class="big">HOST NE PLAY DABAYI HAI</span>
+                      <span>Tap karo — dono aik hi time par movie chalana shuru karenge.</span>
+                      <button class="btn" id="syncPromptBtn" type="button">Sync karke chalao</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="controls">
                   <div class="seek-row">
@@ -326,6 +341,12 @@
                   Paste a streaming site's link above and press Load — if the site allows embedding, it appears here for everyone in the room, and everyone opens the same page.
                 </div>
                 <iframe id="browserFrame" class="browser-frame hidden" title="Shared browser" referrerpolicy="no-referrer"></iframe>
+                <div id="cinehdNote" class="browser-empty hidden">
+                  <span class="big">CINEHD BLOCKS EMBEDDING</span>
+                  CineHD does not allow its pages inside another website, so it cannot show in this frame — verified on both sides. Tap below to open the same CineHD page in a new tab on your side. The room keeps the CineHD link in sync, so you both open the same movie. For synced play/pause, paste the movie's direct video link (.mp4 / .m3u8) into the player above.
+                  <br /><br />
+                  <button class="btn" id="cinehdOpenBtn" type="button">Open CineHD in a new tab</button>
+                </div>
                 <div class="browser-note">
                   <span>If this area stays blank, the site blocks embedding (X-Frame-Options) — that's the site's rule, not a bug. Open it in a new tab and use the same link on both sides; the video player tab still syncs direct links.</span>
                   <button class="btn small ghost" id="openTabBtn" type="button">Open site in new tab</button>
@@ -395,6 +416,7 @@
         var lastLocalAction = 0;
         var lastBufSysAt = 0;
         var lastPeerBufWarn = {};
+        var lastSeekAt = 0;
 
         var myId = clientId();
         var isHost = false;
@@ -600,6 +622,11 @@
           el.appendChild(b);
           el.appendChild(document.createTextNode(" — last measured drift " + Math.abs(lastDrift).toFixed(2) + "s (auto-corrected when it passes 0.8s). Play, pause, seek and speed changes travel through the server."));
         }
+        function syncIcons() {
+          var paused = video.paused;
+          $("playIcon").style.display = paused ? "none" : "";
+          $("pauseIcon").style.display = paused ? "" : "none";
+        }
         function updatePeerBufferBanner(s) {
           var names = [];
           Object.keys(s.buf || {}).forEach(function (id) {
@@ -626,27 +653,29 @@
             // Chat: render anything we haven't seen yet.
             (s.chat || []).forEach(renderChatEntry);
 
-            // Buffering warnings from the other side (debounced: at most
-            // one warning per side every 15s, so a flapping connection
-            // cannot flood the chat with dozens of notices).
+            // Buffering warnings from the other side. The banner under the
+            // player always shows it; chat gets at most ONE line per
+            // minute per side — the old version flooded the chat with
+            // 10+ copies when a connection flapped.
             Object.keys(s.buf || {}).forEach(function (id) {
               if (id === myId) return;
               var b = s.buf[id];
               var nowMs = Date.now();
               if (b.on && !prevPeerBuf[b.name]) {
-                if (!lastPeerBufWarn[b.name] || nowMs - lastPeerBufWarn[b.name] > 15000) {
+                if (!lastPeerBufWarn[b.name] || nowMs - lastPeerBufWarn[b.name] > 60000) {
                   addSys(b.name + " is buffering — their connection is catching up", true);
                   lastPeerBufWarn[b.name] = nowMs;
                 }
               }
-              if (!b.on && prevPeerBuf[b.name] && lastPeerBufWarn[b.name]) addSys(b.name + " is back — buffering cleared");
               prevPeerBuf[b.name] = !!b.on;
             });
             updatePeerBufferBanner(s);
 
-            // Presence / count.
+            // Presence / count. 90s window: a background tab's timers get
+            // throttled by the browser, so a 30s window wrongly dropped
+            // people to "1 watching" while they were still in the room.
             var live = Object.keys(s.members || {}).filter(function (id) {
-              return (s.members[id].seen || 0) > Date.now() - 30000;
+              return (s.members[id].seen || 0) > Date.now() - 90000;
             });
             setCount(Math.max(1, live.length));
             if (live.length > 1) setStatus("on", "Connected");
@@ -658,15 +687,29 @@
             // Playback state (only if someone else is driving playback,
             // and never within 2s of your own press — a stale state must
             // not undo a play/pause you just made).
+            // Hard rules, learned from the failed test: while the host is
+            // PAUSED, force the exact time on every poll (no drift
+            // threshold, no stuck-seeking guard) — the old code only
+            // corrected past 0.5s and only when not seeking, so a stalled
+            // guest sat 1–2s ahead forever and never followed a seek.
             if (Date.now() - lastLocalAction > 2000 && s.driver && s.driver !== myId && s.mode === "video" && video.readyState >= 1) {
               var exp = expectedTime(s);
               var drift = video.currentTime - exp;
               lastDrift = drift;
-              if (Math.abs(drift) > DRIFT_S && !video.seeking) {
-                applyRemote(function () { try { video.currentTime = exp; } catch (e) {} });
+              if (!s.playing) {
+                applyRemote(function () {
+                  if (!video.paused) video.pause();
+                  if (Math.abs(video.currentTime - exp) > 0.3 && (Date.now() - lastSeekAt > 2000 || !video.seeking)) {
+                    try { video.currentTime = exp; lastSeekAt = Date.now(); } catch (e) {}
+                  }
+                  hideSyncPrompt();
+                });
+              } else {
+                if (Math.abs(drift) > DRIFT_S && (Date.now() - lastSeekAt > 2000 || !video.seeking)) {
+                  applyRemote(function () { try { video.currentTime = exp; lastSeekAt = Date.now(); } catch (e) {} });
+                }
+                if (video.paused) applyRemote(function () { video.play().catch(function () { showSyncPrompt(); }); });
               }
-              if (s.playing && video.paused) applyRemote(function () { video.play().catch(function () { showTapToPlay(); }); });
-              if (!s.playing && !video.paused) applyRemote(function () { video.pause(); });
               if (s.rate && video.playbackRate !== s.rate) {
                 applyRemote(function () {
                   video.playbackRate = s.rate;
@@ -674,6 +717,7 @@
                 });
               }
               updateSyncLine();
+              setTimeout(syncIcons, 400);
             }
 
             // Presence heartbeat (our own member entry), every ~10s.
@@ -820,8 +864,19 @@
             showTab("browser");
             $("browserEmpty").classList.add("hidden");
             var f = $("browserFrame");
-            f.classList.remove("hidden");
-            f.src = url;
+            /* CineHD refuses to embed (verified: "cinehd.vc refused to
+               connect" on both sides), so don't show a blank broken
+               frame — show the open-in-new-tab card instead. Other
+               sites still load in the frame as before. */
+            if (/cinehd/i.test(url)) {
+              f.classList.add("hidden");
+              f.removeAttribute("src");
+              $("cinehdNote").classList.remove("hidden");
+            } else {
+              $("cinehdNote").classList.add("hidden");
+              f.classList.remove("hidden");
+              f.src = url;
+            }
           }
         }
 
@@ -897,20 +952,37 @@
           }
         });
         video.addEventListener("canplay", function () { videoErrShown = false; });
-        function showTapToPlay() {
-          var el = $("emptyState");
-          el.style.display = "flex";
-          el.innerHTML = "";
-          var b = document.createElement("span");
-          b.className = "big";
-          b.textContent = "TAP PLAY TO START";
-          var s = document.createElement("span");
-          s.textContent = "Your browser blocked auto-play with sound. Tap the play button once — after that, play and pause will stay in sync.";
-          el.appendChild(b);
-          el.appendChild(s);
-          addSys("Tap play once on your side — the browser blocked auto-play with sound.", true);
+        /* Sync prompt: when the host presses Play, the guest's browser
+           usually blocks auto-play with sound until the guest taps
+           something. So instead of failing silently, the guest gets a
+           pop-up — one tap seeks to the host's exact time and starts
+           playback, so both sides start together. Pause and seek need no
+           tap (they work without a gesture), so they still apply
+           automatically and never show a pop-up. */
+        var syncPromptShown = false;
+        function showSyncPrompt() {
+          if (syncPromptShown) return;
+          syncPromptShown = true;
+          $("syncPrompt").classList.add("show");
+          addSys("Host ne Play dabayi hai — Sync karke chalao dabao, dono aik hi time par chalenge.", false);
         }
-        video.addEventListener("play", function () { $("emptyState").style.display = "none"; });
+        function hideSyncPrompt() {
+          syncPromptShown = false;
+          $("syncPrompt").classList.remove("show");
+        }
+        function showTapToPlay() { showSyncPrompt(); }
+        $("syncPromptBtn").addEventListener("click", function () {
+          hideSyncPrompt();
+          lastLocalAction = Date.now();
+          if (roomState && roomState.mode === "video") {
+            var exp = expectedTime(roomState);
+            if (isFinite(exp) && Math.abs(video.currentTime - exp) > 0.3) {
+              try { video.currentTime = exp; } catch (e) {}
+            }
+          }
+          video.play().catch(function () { showSyncPrompt(); });
+        });
+        video.addEventListener("play", function () { $("emptyState").style.display = "none"; hideSyncPrompt(); });
 
         function setBuffering(on) {
           if (localBuffering === on) return;
@@ -919,12 +991,11 @@
           pushState(function (s) {
             s.buf[myId] = { name: myName, on: on, ts: Date.now() };
           });
-          /* One notice per buffering episode, at most every 10s — the
-             old code posted a chat line on every flap. */
-          if (on && Date.now() - lastBufSysAt > 10000) {
-            lastBufSysAt = Date.now();
-            addSys("You are buffering — your partner has been notified", true);
-          }
+          /* No chat line here at all: the overlay on your own player
+             and the banner on your partner's side already show it.
+             The old chat line flooded the chat when a connection
+             flapped. The partner still gets at most one chat warning
+             per minute, from the poll handler. */
         }
         video.addEventListener("waiting", function () { setBuffering(true); });
         video.addEventListener("stalled", function () { setBuffering(true); });
@@ -972,6 +1043,9 @@
         $("tabBrowser").addEventListener("click", function () { showTab("browser"); });
         $("openTabBtn").addEventListener("click", function () {
           if (browserUrl) window.open(browserUrl, "_blank", "noopener");
+        });
+        $("cinehdOpenBtn").addEventListener("click", function () {
+          window.open(browserUrl || "https://cinehd.vc/", "_blank", "noopener");
         });
 
         $("loadBtn").addEventListener("click", function () {
