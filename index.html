@@ -1,0 +1,910 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <title>Watch Party — Watch Together, In Sync</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+        <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+    <style>
+      :root {
+        --bg: #0a0a0c;
+        --bg-2: #121215;
+        --panel: #17171b;
+        --panel-2: #1e1e24;
+        --line: #2a2a32;
+        --ink: #f4f1ea;
+        --ink-2: #b9b4a8;
+        --ink-3: #7d786d;
+        --accent: #e8b33c;
+        --accent-ink: #1a1405;
+        --red: #e0483e;
+        --green: #3fce7c;
+        --amber: #f0a832;
+        --radius: 14px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 16px;
+        line-height: 1.5;
+        min-height: 100vh;
+        background-image: radial-gradient(1100px 480px at 50% -120px, rgba(232,179,60,.10), transparent 65%);
+      }
+      button { font-family: inherit; cursor: pointer; }
+      input, select { font-family: inherit; }
+      a { color: var(--accent); }
+
+      .wrap { max-width: 1240px; margin: 0 auto; padding: 0 18px 40px; }
+
+      /* ---------- Landing ---------- */
+      .landing { max-width: 880px; margin: 0 auto; padding: 56px 18px 30px; text-align: center; }
+      .marquee {
+        font-family: "Bebas Neue", "Arial Narrow", sans-serif;
+        font-size: clamp(56px, 11vw, 108px);
+        letter-spacing: .04em;
+        line-height: .95;
+        margin: 0;
+        color: var(--ink);
+      }
+      .marquee .gold { color: var(--accent); }
+      .tagline { color: var(--ink-2); font-size: clamp(16px, 2.4vw, 19px); max-width: 620px; margin: 16px auto 6px; }
+      .no-signup { color: var(--ink-3); font-size: 14px; margin: 0 0 34px; }
+      .name-row { max-width: 420px; margin: 0 auto 22px; text-align: left; }
+      .name-row label, .join-card label { display: block; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+      .field {
+        width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+        border-radius: 10px; padding: 13px 15px; font-size: 16px; outline: none;
+      }
+      .field:focus { border-color: var(--accent); }
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
+      .card h2 { margin: 0 0 8px; font-size: 20px; }
+      .card p { margin: 0 0 18px; color: var(--ink-2); font-size: 15px; }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        border: none; border-radius: 10px; padding: 13px 22px; font-size: 16px; font-weight: 800;
+        background: var(--accent); color: var(--accent-ink); transition: filter .15s ease;
+      }
+      .btn:hover { filter: brightness(1.08); }
+      .btn:disabled { opacity: .55; cursor: wait; }
+      .btn.ghost { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
+      .btn.small { padding: 9px 14px; font-size: 14px; border-radius: 8px; }
+      .btn.block { width: 100%; }
+      .code-input {
+        text-transform: uppercase; letter-spacing: .35em; font-family: "JetBrains Mono", monospace;
+        font-weight: 700; text-align: center; font-size: 20px;
+      }
+      .join-row { display: flex; flex-direction: column; gap: 12px; }
+      .err { color: var(--red); font-size: 14px; min-height: 20px; margin: 10px 0 0; text-align: center; }
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 34px 0 0; text-align: left; }
+      .step { border-top: 2px solid var(--line); padding-top: 12px; }
+      .step b { display: block; font-size: 15px; margin-bottom: 4px; }
+      .step span { color: var(--ink-2); font-size: 14px; }
+      .step .num { font-family: "Bebas Neue", sans-serif; color: var(--accent); font-size: 22px; letter-spacing: .05em; }
+      .honest {
+        margin: 30px auto 0; max-width: 700px; background: var(--bg-2); border: 1px solid var(--line);
+        border-radius: var(--radius); padding: 16px 20px; color: var(--ink-2); font-size: 14px; text-align: left;
+      }
+      .honest b { color: var(--ink); }
+
+      footer { text-align: center; color: var(--ink-3); font-size: 13px; padding: 26px 18px 34px; }
+
+      /* ---------- Room ---------- */
+      .hidden { display: none !important; }
+      .room-head {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+        padding: 16px 0 12px; border-bottom: 1px solid var(--line);
+      }
+      .room-head .brand { font-family: "Bebas Neue", sans-serif; font-size: 26px; letter-spacing: .05em; margin-right: 4px; }
+      .room-head .brand .gold { color: var(--accent); }
+      .code-chip {
+        display: inline-flex; align-items: center; gap: 10px; background: var(--panel);
+        border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px 7px 14px;
+      }
+      .code-chip .lbl { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+      .code-chip .code { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 19px; letter-spacing: .22em; color: var(--accent); }
+      .status-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+      .dot.on { background: var(--green); box-shadow: 0 0 8px rgba(63,206,124,.7); }
+      .dot.wait { background: var(--amber); box-shadow: 0 0 8px rgba(240,168,50,.7); }
+      .spacer { flex: 1; }
+
+      .url-bar { display: flex; gap: 10px; margin: 16px 0 6px; flex-wrap: wrap; }
+      .url-bar .field { flex: 1 1 320px; }
+      .url-hint { color: var(--ink-3); font-size: 13px; margin: 4px 0 14px; }
+      .url-hint button { background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 700; padding: 0; text-decoration: underline; }
+
+      .room-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+      .stage { min-width: 0; }
+      .tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+      .tab {
+        background: var(--panel); border: 1px solid var(--line); color: var(--ink-2);
+        border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 700;
+      }
+      .tab.active { background: var(--panel-2); color: var(--ink); border-color: var(--accent); }
+      .player-shell { background: #000; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; position: relative; }
+      .video-wrap { position: relative; aspect-ratio: 16 / 9; background: #000; }
+      .video-wrap video { width: 100%; height: 100%; display: block; background: #000; }
+      .empty-state {
+        position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; text-align: center; padding: 24px; color: var(--ink-2);
+      }
+      .empty-state .big { font-family: "Bebas Neue", sans-serif; font-size: 34px; letter-spacing: .05em; color: var(--ink); }
+      .buffer-overlay {
+        position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+        background: rgba(0,0,0,.45); color: var(--ink); font-weight: 700; font-size: 15px; gap: 10px;
+      }
+      .buffer-overlay.show { display: flex; }
+      .spinner { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex: none; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .peer-buffer {
+        display: none; margin-top: 10px; background: rgba(240,168,50,.12); border: 1px solid rgba(240,168,50,.45);
+        color: #ffd98a; border-radius: 10px; padding: 9px 13px; font-size: 14px; font-weight: 600;
+      }
+      .peer-buffer.show { display: block; }
+      .controls { background: var(--panel); padding: 12px 14px 14px; }
+      .seek-row { display: flex; align-items: center; gap: 12px; }
+      .seek-row .time { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      input[type="range"] { -webkit-appearance: none; appearance: none; flex: 1; height: 8px; border-radius: 99px; background: var(--line); outline: none; min-width: 60px; }
+      input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); border: 2px solid #000; cursor: pointer; }
+      input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid #000; cursor: pointer; }
+      .btn-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+      .ctl {
+        width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--line);
+        background: var(--panel-2); color: var(--ink); display: inline-flex; align-items: center; justify-content: center;
+      }
+      .ctl svg { width: 24px; height: 24px; fill: currentColor; }
+      .ctl.main { width: 62px; height: 62px; background: var(--accent); color: var(--accent-ink); border: none; border-radius: 50%; }
+      .ctl.main svg { width: 28px; height: 28px; }
+      .ctl:active { transform: scale(.96); }
+      .speed-sel { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; font-size: 15px; font-weight: 700; height: 52px; }
+      .sync-line { color: var(--ink-3); font-size: 13px; margin-top: 10px; }
+      .sync-line b { color: var(--green); font-weight: 700; }
+
+      .browser-shell { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+      .browser-frame { width: 100%; height: 520px; border: none; background: #fff; display: block; }
+      .browser-note { padding: 12px 16px; color: var(--ink-2); font-size: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+      .browser-empty { padding: 44px 24px; text-align: center; color: var(--ink-2); }
+      .browser-empty .big { font-family: "Bebas Neue", sans-serif; font-size: 30px; color: var(--ink); letter-spacing: .05em; display: block; margin-bottom: 6px; }
+
+      /* Chat */
+      .chat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; height: 640px; overflow: hidden; }
+      .chat-head { padding: 13px 16px; border-bottom: 1px solid var(--line); font-weight: 800; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+      .chat-head span { color: var(--ink-3); font-weight: 600; font-size: 13px; }
+      .chat-msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+      .msg { max-width: 88%; background: var(--panel-2); border-radius: 12px; padding: 8px 12px; align-self: flex-start; word-wrap: break-word; }
+      .msg.mine { align-self: flex-end; background: rgba(232,179,60,.16); }
+      .msg .who { font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 2px; }
+      .msg.mine .who { color: var(--ink-2); }
+      .msg .txt { font-size: 15px; }
+      .msg.sys { align-self: center; max-width: 96%; background: transparent; border: 1px dashed var(--line); color: var(--ink-2); font-size: 13px; text-align: center; padding: 6px 12px; }
+      .msg.sys.warn { border-color: rgba(240,168,50,.55); color: #ffd98a; background: rgba(240,168,50,.08); }
+      .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+      .chat-input .field { flex: 1; }
+      .chat-empty { color: var(--ink-3); font-size: 14px; text-align: center; margin: auto 0; padding: 20px; }
+
+      @media (max-width: 900px) {
+        .cards, .steps { grid-template-columns: 1fr; }
+        .room-grid { grid-template-columns: 1fr; }
+        .chat { height: 430px; }
+        .browser-frame { height: 420px; }
+        .landing { padding-top: 38px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner { animation: none; }
+        .ctl:active { transform: none; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- ============ LANDING ============ -->
+    <section id="landing" class="landing">
+      <h1 class="marquee">WATCH <span class="gold">PARTY</span></h1>
+      <p class="tagline">One room, one movie, two screens — perfectly in sync. Create a room, share the code, and press play together. No screen-sharing lag, no stutter: the video loads on each person's own device, only the timing travels between you.</p>
+      <p class="no-signup">No signup. No account. No payment. Just a room code.</p>
+
+      <div class="name-row">
+        <label for="nameInput">Your name (shown in chat)</label>
+        <input id="nameInput" class="field" type="text" maxlength="24" placeholder="e.g. Abdul" autocomplete="off" />
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <h2>Create a room</h2>
+          <p>Start a new watch party and get a short room code to send to your partner — they join with just that code.</p>
+          <button id="createBtn" class="btn block">Create Room</button>
+        </div>
+        <div class="card join-card">
+          <h2>Join a room</h2>
+          <p>Got a code from your partner? Enter it here and you're in — the movie syncs to wherever they are.</p>
+          <div class="join-row">
+            <input id="joinCode" class="field code-input" type="text" maxlength="6" placeholder="------" autocomplete="off" spellcheck="false" />
+            <button id="joinBtn" class="btn ghost block">Join Room</button>
+          </div>
+        </div>
+      </div>
+      <p id="landErr" class="err"></p>
+
+      <div class="steps">
+        <div class="step"><span class="num">01</span><b>Create &amp; share</b><span>One person creates a room and shares the 6-letter code.</span></div>
+        <div class="step"><span class="num">02</span><b>Paste a link</b><span>Drop in a direct video link (MP4, WebM, HLS stream) or a free streaming site's page.</span></div>
+        <div class="step"><span class="num">03</span><b>Watch together</b><span>Play, pause, seek and speed changes happen on both screens at the same moment. Chat alongside.</span></div>
+      </div>
+
+      <div class="honest">
+        <b>One honest note:</b> Netflix, Prime Video and similar paid platforms block other websites from embedding their pages, so they can't play inside the shared browser here — no tool can change that. For those, use a direct video/stream link in the player instead. Free streaming sites that allow embedding will open in the Shared Browser tab.
+      </div>
+    </section>
+
+    <!-- ============ ROOM ============ -->
+    <section id="room" class="hidden">
+      <div class="wrap">
+        <div class="room-head">
+          <span class="brand">WATCH <span class="gold">PARTY</span></span>
+          <span class="code-chip">
+            <span class="lbl">Room</span>
+            <span class="code" id="roomCodeLabel">------</span>
+            <button id="copyCodeBtn" class="btn small" type="button">Copy code</button>
+          </span>
+          <span class="status-pill"><span id="statusDot" class="dot wait"></span><span id="statusText">Connecting…</span></span>
+          <span class="status-pill" id="countPill">1 watching</span>
+          <span class="spacer"></span>
+          <button id="leaveBtn" class="btn small ghost" type="button">Leave room</button>
+        </div>
+
+        <div class="url-bar">
+          <input id="urlInput" class="field" type="url" placeholder="Paste a video link (mp4 / webm / .m3u8) or a streaming site link, then press Load" autocomplete="off" spellcheck="false" />
+          <button id="loadBtn" class="btn" type="button">Load</button>
+        </div>
+        <p class="url-hint">Direct video files and HLS streams play in the synced player. Other site links open in the Shared Browser tab. <button type="button" id="sampleBtn">Load a sample video to test sync</button></p>
+
+        <div class="room-grid">
+          <div class="stage">
+            <div class="tabs">
+              <button class="tab active" id="tabPlayer" type="button">Video Player</button>
+              <button class="tab" id="tabBrowser" type="button">Shared Browser</button>
+            </div>
+
+            <div id="panePlayer">
+              <div class="player-shell" id="playerShell">
+                <div class="video-wrap" id="videoWrap">
+                  <video id="video" playsinline preload="auto"></video>
+                  <div class="empty-state" id="emptyState">
+                    <span class="big">NOTHING LOADED YET</span>
+                    <span>Paste a direct video or stream link above and press Load.<br />It will start on everyone's screen at the same time.</span>
+                  </div>
+                  <div class="buffer-overlay" id="bufferOverlay"><span class="spinner"></span> Buffering on your side…</div>
+                </div>
+                <div class="controls">
+                  <div class="seek-row">
+                    <span class="time" id="timeLabel">0:00 / 0:00</span>
+                    <input type="range" id="seekBar" min="0" max="1000" value="0" />
+                  </div>
+                  <div class="btn-row">
+                    <button class="ctl main" id="playBtn" type="button" aria-label="Play or pause">
+                      <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                      <svg id="pauseIcon" viewBox="0 0 24 24" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                    </button>
+                    <button class="ctl" id="backBtn" type="button" aria-label="Back 10 seconds">
+                      <svg viewBox="0 0 24 24"><path d="M11 5V1L6 6l5 5V7c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H3c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z"/></svg>
+                    </button>
+                    <button class="ctl" id="fwdBtn" type="button" aria-label="Forward 10 seconds">
+                      <svg viewBox="0 0 24 24"><path d="M13 5V1l5 5-5 5V7c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6h2c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8z"/></svg>
+                    </button>
+                    <select id="speedSel" class="speed-sel" aria-label="Playback speed">
+                      <option value="0.5">0.5×</option>
+                      <option value="0.75">0.75×</option>
+                      <option value="1" selected>1×</option>
+                      <option value="1.25">1.25×</option>
+                      <option value="1.5">1.5×</option>
+                      <option value="2">2×</option>
+                    </select>
+                    <span class="spacer"></span>
+                    <button class="ctl" id="fsBtn" type="button" aria-label="Fullscreen">
+                      <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                    </button>
+                  </div>
+                  <p class="sync-line" id="syncLine">Sync is server-backed — play, pause, seek and speed changes reach the other screen within about 2 seconds.</p>
+                </div>
+              </div>
+              <div class="peer-buffer" id="peerBuffer"></div>
+            </div>
+
+            <div id="paneBrowser" class="hidden">
+              <div class="browser-shell">
+                <div class="browser-empty" id="browserEmpty">
+                  <span class="big">SHARED BROWSER</span>
+                  Paste a streaming site's link above and press Load — if the site allows embedding, it appears here for everyone in the room, and everyone opens the same page.
+                </div>
+                <iframe id="browserFrame" class="browser-frame hidden" title="Shared browser" referrerpolicy="no-referrer"></iframe>
+                <div class="browser-note">
+                  <span>If this area stays blank, the site blocks embedding (X-Frame-Options) — that's the site's rule, not a bug. Open it in a new tab and use the same link on both sides; the video player tab still syncs direct links.</span>
+                  <button class="btn small ghost" id="openTabBtn" type="button">Open site in new tab</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="chat">
+            <div class="chat-head">Chat <span id="chatWho"></span></div>
+            <div class="chat-msgs" id="chatMsgs">
+              <p class="chat-empty" id="chatEmpty">No messages yet. Say hello — and if either side starts buffering, a warning will appear here automatically.</p>
+            </div>
+            <form class="chat-input" id="chatForm">
+              <input id="chatInput" class="field" type="text" maxlength="500" placeholder="Type a message…" autocomplete="off" />
+              <button class="btn" type="submit">Send</button>
+            </form>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <footer>© 2026 Mr. Abdul Rahman Dogar</footer>
+
+    <script>
+      (function () {
+        "use strict";
+
+        /* ================= Helpers ================= */
+        var $ = function (id) { return document.getElementById(id); };
+        var CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        function makeCode() {
+          var s = "";
+          for (var i = 0; i < 6; i++) s += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+          return s;
+        }
+        function fmt(t) {
+          if (!isFinite(t) || t < 0) t = 0;
+          t = Math.floor(t);
+          var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+          return (h > 0 ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (s < 10 ? "0" : "") + s;
+        }
+        function isVideoFile(u) { return /\.(mp4|webm|ogg|ogv|mov|m4v)(\?|#|$)/i.test(u); }
+        function isHls(u) { return /\.m3u8(\?|#|$)/i.test(u); }
+        function clientId() {
+          return "c" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+        }
+
+        /* ================= Server sync (Vercel Blob KV backend) =================
+           No PeerJS, no signalling server. Room state lives in the shared
+           backend at https://apps-backend-tahqeeq.vercel.app
+           (PUT/GET /v1/kv/:key). Every client polls the room key every
+           1.5 seconds and writes the whole room state on every change
+           (play, pause, seek, speed, load, chat, buffering, presence).
+           The video itself still loads on each person's own device from
+           their own internet — only the timing and chat travel through
+           the server. */
+        var API_BASE = "https://apps-backend-tahqeeq.vercel.app";
+        var POLL_MS = 1500;
+        var PRESENCE_MS = 10000;
+        var DRIFT_S = 0.8;
+
+        var myId = clientId();
+        var isHost = false;
+        var myCode = "";
+        var myName = "Guest";
+        var currentUrl = "";
+        var currentMode = "";         // 'video' | 'browser'
+        var browserUrl = "";
+        var applyingRemote = false;
+        var hls = null;
+        var pollTimer = null;
+        var hbTimer = null;
+        var localBuffering = false;
+        var lastDrift = null;
+        var lastPresencePut = 0;
+        var lastPollAt = 0;
+        var roomState = null;         // last state we know (local cache)
+        var seenChatKeys = {};        // dedupe chat echoes
+        var prevPeerBuf = {};         // name -> bool, for buffering warnings
+        var renderedChat = 0;         // how many chat entries rendered
+
+        var video = $("video");
+
+        function kvKey(code) { return "wp:" + code; }
+
+        function kvGet(code) {
+          return fetch(API_BASE + "/v1/kv/" + encodeURIComponent(kvKey(code)), { cache: "no-store" })
+            .then(function (r) {
+              if (r.status === 404) return null;
+              if (!r.ok) throw new Error("kv get " + r.status);
+              return r.json();
+            })
+            .then(function (j) { return j ? j.value : null; })
+            .catch(function () { return null; });
+        }
+        function kvPut(code, state) {
+          return fetch(API_BASE + "/v1/kv/" + encodeURIComponent(kvKey(code)), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: state })
+          }).catch(function () {});
+        }
+
+        function freshState() {
+          return {
+            v: 1, createdAt: Date.now(), url: "", mode: "", time: 0,
+            playing: false, rate: 1, updatedAt: Date.now(), updatedBy: myId,
+            chat: [], buf: {}, members: {}
+          };
+        }
+        function chatKey(m) { return m.ts + "|" + m.n + "|" + m.t; }
+        function mergeChat(a, b) {
+          var out = (a || []).concat(b || []);
+          var seen = {}, res = [];
+          out.forEach(function (m) {
+            var k = chatKey(m);
+            if (!seen[k]) { seen[k] = 1; res.push(m); }
+          });
+          res.sort(function (x, y) { return x.ts - y.ts; });
+          return res.slice(-100);
+        }
+        /* Write the room state: read latest first, merge chat / buffering /
+           members so two people writing at once don't wipe each other out,
+           then PUT. `mut` edits the merged state in place. */
+        function pushState(mut) {
+          return kvGet(myCode).then(function (latest) {
+            var s = latest || roomState || freshState();
+            if (roomState) {
+              s.chat = mergeChat(s.chat, roomState.chat);
+              s.buf = Object.assign({}, s.buf, roomState.buf);
+              s.members = Object.assign({}, s.members, roomState.members);
+            }
+            mut(s);
+            s.updatedAt = Date.now();
+            s.updatedBy = myId;
+            roomState = s;
+            return kvPut(myCode, s);
+          });
+        }
+        /* Lightweight time write (host heartbeat while playing): PUT the
+           cached state with a fresh time, no GET first. */
+        function pushTime() {
+          if (!roomState) return;
+          roomState.time = video.currentTime || 0;
+          roomState.playing = !video.paused;
+          roomState.rate = video.playbackRate || 1;
+          roomState.updatedAt = Date.now();
+          roomState.updatedBy = myId;
+          roomState.members[myId] = { name: myName, seen: Date.now() };
+          kvPut(myCode, roomState);
+        }
+        function touchPresence() {
+          lastPresencePut = Date.now();
+          pushState(function (s) {
+            s.members[myId] = { name: myName, seen: Date.now() };
+          });
+        }
+
+        /* ================= UI refs ================= */
+        var landing = $("landing"), room = $("room");
+
+        function setStatus(mode, text) {
+          var dot = $("statusDot");
+          dot.className = "dot" + (mode === "on" ? " on" : mode === "wait" ? " wait" : "");
+          $("statusText").textContent = text;
+        }
+        function setCount(n) { $("countPill").textContent = n + (n === 1 ? " watching" : " watching"); }
+
+        /* ================= Chat ================= */
+        function addMsg(who, text, cls) {
+          var empty = $("chatEmpty");
+          if (empty) empty.remove();
+          var box = $("chatMsgs");
+          var div = document.createElement("div");
+          div.className = "msg" + (cls ? " " + cls : "");
+          if (who) {
+            var w = document.createElement("div");
+            w.className = "who";
+            w.textContent = who;
+            div.appendChild(w);
+          }
+          var t = document.createElement("div");
+          t.className = "txt";
+          t.textContent = text;
+          div.appendChild(t);
+          box.appendChild(div);
+          box.scrollTop = box.scrollHeight;
+        }
+        function addSys(text, warn) { addMsg(null, text, "sys" + (warn ? " warn" : "")); }
+        function renderChatEntry(m) {
+          var k = chatKey(m);
+          if (seenChatKeys[k]) return;
+          seenChatKeys[k] = 1;
+          if (m.sys) addSys(m.t, !!m.warn);
+          else addMsg(m.n, m.t, m.n === myName ? "mine" : "");
+        }
+        function postChat(n, t, sys, warn) {
+          var m = { n: n, t: t, ts: Date.now(), sys: !!sys, warn: !!warn };
+          renderChatEntry(m);
+          pushState(function (s) { s.chat = mergeChat(s.chat, [m]); });
+        }
+
+        /* ================= Polling: apply remote state ================= */
+        function expectedTime(s) {
+          if (!s.playing) return s.time || 0;
+          return (s.time || 0) + ((Date.now() - (s.updatedAt || Date.now())) / 1000) * (s.rate || 1);
+        }
+        function applyRemote(fn) {
+          applyingRemote = true;
+          fn();
+          setTimeout(function () { applyingRemote = false; }, 350);
+        }
+        function updateSyncLine() {
+          if (lastDrift === null) return;
+          var el = $("syncLine");
+          el.innerHTML = "";
+          var b = document.createElement("b");
+          b.textContent = "In sync";
+          el.appendChild(b);
+          el.appendChild(document.createTextNode(" — last measured drift " + Math.abs(lastDrift).toFixed(2) + "s (auto-corrected when it passes 0.8s). Play, pause, seek and speed changes travel through the server."));
+        }
+        function updatePeerBufferBanner(s) {
+          var names = [];
+          Object.keys(s.buf || {}).forEach(function (id) {
+            if (id !== myId && s.buf[id].on) names.push(s.buf[id].name);
+          });
+          var el = $("peerBuffer");
+          if (names.length) {
+            el.textContent = "Buffering on the other side: " + names.join(", ") + " — the movie may stutter for them until their connection catches up.";
+            el.classList.add("show");
+          } else {
+            el.classList.remove("show");
+          }
+        }
+
+        function poll() {
+          if (!myCode) return;
+          var now = Date.now();
+          kvGet(myCode).then(function (s) {
+            if (!s) return;
+            var isNewer = !roomState || (s.updatedAt || 0) >= (roomState.updatedAt || 0);
+            roomState = s;
+            lastPollAt = now;
+
+            // Chat: render anything we haven't seen yet.
+            (s.chat || []).forEach(renderChatEntry);
+
+            // Buffering warnings from the other side.
+            Object.keys(s.buf || {}).forEach(function (id) {
+              if (id === myId) return;
+              var b = s.buf[id];
+              if (b.on && !prevPeerBuf[b.name]) addSys(b.name + " is buffering — their connection is catching up", true);
+              if (!b.on && prevPeerBuf[b.name]) addSys(b.name + " is back — buffering cleared");
+              prevPeerBuf[b.name] = !!b.on;
+            });
+            updatePeerBufferBanner(s);
+
+            // Presence / count.
+            var live = Object.keys(s.members || {}).filter(function (id) {
+              return (s.members[id].seen || 0) > Date.now() - 30000;
+            });
+            setCount(Math.max(1, live.length));
+            if (live.length > 1) setStatus("on", "Connected");
+            else if (isHost) setStatus("wait", "Waiting for your partner — share the code");
+
+            // Video URL changed remotely?
+            if (s.url && s.url !== currentUrl) loadUrl(s.url, true);
+
+            // Playback state (only if the update came from someone else).
+            if (s.updatedBy && s.updatedBy !== myId && s.mode === "video" && video.readyState >= 1) {
+              var exp = expectedTime(s);
+              var drift = video.currentTime - exp;
+              lastDrift = drift;
+              if (Math.abs(drift) > DRIFT_S && !video.seeking) {
+                applyRemote(function () { try { video.currentTime = exp; } catch (e) {} });
+              }
+              if (s.playing && video.paused) applyRemote(function () { video.play().catch(function () {}); });
+              if (!s.playing && !video.paused) applyRemote(function () { video.pause(); });
+              if (s.rate && video.playbackRate !== s.rate) {
+                applyRemote(function () {
+                  video.playbackRate = s.rate;
+                  $("speedSel").value = String(s.rate);
+                });
+              }
+              updateSyncLine();
+            }
+
+            // Presence heartbeat (our own member entry), every ~10s.
+            if (now - lastPresencePut > PRESENCE_MS) touchPresence();
+          });
+        }
+
+        function startPolling() {
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = setInterval(poll, POLL_MS);
+          poll();
+          if (hbTimer) clearInterval(hbTimer);
+          hbTimer = setInterval(function () {
+            if (currentMode === "video" && !video.paused) pushTime();
+          }, 3000);
+        }
+
+        /* ================= Room lifecycle ================= */
+        function enterRoom(code) {
+          myCode = code;
+          $("roomCodeLabel").textContent = code;
+          landing.classList.add("hidden");
+          room.classList.remove("hidden");
+          $("chatWho").textContent = "You are " + myName;
+          window.scrollTo(0, 0);
+        }
+        function getName() {
+          var v = $("nameInput").value.trim();
+          return v ? v.slice(0, 24) : "Guest-" + Math.floor(1000 + Math.random() * 9000);
+        }
+
+        function createRoom() {
+          var btn = $("createBtn");
+          btn.disabled = true;
+          btn.textContent = "Creating…";
+          myName = getName();
+          var code = makeCode();
+          var s = freshState();
+          s.members[myId] = { name: myName, seen: Date.now() };
+          kvPut(code, s).then(function () {
+            isHost = true;
+            roomState = s;
+            enterRoom(code);
+            setStatus("wait", "Waiting for your partner — share the code");
+            setCount(1);
+            postChat("", "Room created. Share the code " + code + " with your partner — they enter it on the home screen to join.", true, false);
+            lastPresencePut = Date.now();
+            startPolling();
+            btn.disabled = false;
+            btn.textContent = "Create Room";
+          }).catch(function () {
+            btn.disabled = false;
+            btn.textContent = "Create Room";
+            $("landErr").textContent = "Could not reach the server. Check your connection and try again.";
+          });
+        }
+
+        function joinRoom(code) {
+          var btn = $("joinBtn");
+          btn.disabled = true;
+          btn.textContent = "Joining…";
+          myName = getName();
+          kvGet(code).then(function (s) {
+            if (!s) {
+              btn.disabled = false;
+              btn.textContent = "Join Room";
+              $("landErr").textContent = "Room not found. Check the code — and make sure the host still has the room open.";
+              return;
+            }
+            isHost = false;
+            roomState = s;
+            enterRoom(code);
+            setStatus("on", "Connected");
+            setCount(2);
+            touchPresence();
+            postChat("", myName + " joined the room", true, false);
+            if (s.url) loadUrl(s.url, true);
+            startPolling();
+            btn.disabled = false;
+            btn.textContent = "Join Room";
+          }).catch(function () {
+            btn.disabled = false;
+            btn.textContent = "Join Room";
+            $("landErr").textContent = "Could not reach the server. Check your connection and try again.";
+          });
+        }
+
+        /* ================= Video loading ================= */
+        function showTab(which) {
+          $("tabPlayer").classList.toggle("active", which === "player");
+          $("tabBrowser").classList.toggle("active", which === "browser");
+          $("panePlayer").classList.toggle("hidden", which !== "player");
+          $("paneBrowser").classList.toggle("hidden", which !== "browser");
+        }
+        function destroyHls() {
+          if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
+        }
+        function loadUrl(url, remote) {
+          url = (url || "").trim();
+          if (!url) return;
+          if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+          currentUrl = url;
+          $("urlInput").value = url;
+          if (isVideoFile(url) || isHls(url)) {
+            currentMode = "video";
+            showTab("player");
+            $("emptyState").style.display = "none";
+            destroyHls();
+            if (isHls(url)) {
+              if (window.Hls && Hls.isSupported()) {
+                hls = new Hls({ maxBufferLength: 30 });
+                hls.loadSource(url);
+                hls.attachMedia(video);
+              } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+                video.src = url;
+              } else {
+                addSys("This browser cannot play HLS streams.", true);
+              }
+            } else {
+              video.src = url;
+            }
+            video.load();
+          } else {
+            currentMode = "browser";
+            browserUrl = url;
+            showTab("browser");
+            $("browserEmpty").classList.add("hidden");
+            var f = $("browserFrame");
+            f.classList.remove("hidden");
+            f.src = url;
+          }
+        }
+
+        /* ================= Playback sync (local events) ================= */
+        video.addEventListener("play", function () {
+          $("playIcon").style.display = "none";
+          $("pauseIcon").style.display = "";
+          if (!applyingRemote) pushState(function (s) { s.playing = true; s.time = video.currentTime; s.rate = video.playbackRate; });
+        });
+        video.addEventListener("pause", function () {
+          $("playIcon").style.display = "";
+          $("pauseIcon").style.display = "none";
+          if (!applyingRemote) pushState(function (s) { s.playing = false; s.time = video.currentTime; });
+        });
+        video.addEventListener("seeked", function () {
+          if (!applyingRemote) pushState(function (s) { s.time = video.currentTime; });
+        });
+        video.addEventListener("ratechange", function () {
+          if (!applyingRemote) pushState(function (s) { s.rate = video.playbackRate; });
+        });
+        video.addEventListener("timeupdate", function () {
+          var bar = $("seekBar");
+          if (video.duration && document.activeElement !== bar) {
+            bar.value = Math.round((video.currentTime / video.duration) * 1000);
+          }
+          $("timeLabel").textContent = fmt(video.currentTime) + " / " + fmt(video.duration);
+        });
+        video.addEventListener("loadedmetadata", function () {
+          $("timeLabel").textContent = fmt(video.currentTime) + " / " + fmt(video.duration);
+        });
+
+        function setBuffering(on) {
+          if (localBuffering === on) return;
+          localBuffering = on;
+          $("bufferOverlay").classList.toggle("show", on);
+          pushState(function (s) {
+            s.buf[myId] = { name: myName, on: on, ts: Date.now() };
+          });
+          if (on) addSys("You are buffering — your partner has been notified", true);
+        }
+        video.addEventListener("waiting", function () { setBuffering(true); });
+        video.addEventListener("stalled", function () { setBuffering(true); });
+        video.addEventListener("playing", function () { setBuffering(false); });
+        video.addEventListener("canplay", function () { setBuffering(false); });
+
+        /* ================= Controls ================= */
+        $("playBtn").addEventListener("click", function () {
+          if (!currentUrl || currentMode !== "video") return;
+          if (video.paused) video.play().catch(function () {});
+          else video.pause();
+        });
+        $("backBtn").addEventListener("click", function () {
+          if (currentMode !== "video") return;
+          video.currentTime = Math.max(0, video.currentTime - 10);
+        });
+        $("fwdBtn").addEventListener("click", function () {
+          if (currentMode !== "video") return;
+          video.currentTime = Math.min(video.duration || 1e9, video.currentTime + 10);
+        });
+        $("seekBar").addEventListener("change", function () {
+          if (currentMode !== "video" || !video.duration) return;
+          video.currentTime = (Number(this.value) / 1000) * video.duration;
+        });
+        $("speedSel").addEventListener("change", function () {
+          video.playbackRate = Number(this.value);
+        });
+        $("fsBtn").addEventListener("click", function () {
+          var shell = $("playerShell");
+          if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+          else if (shell.requestFullscreen) shell.requestFullscreen().catch(function () {});
+          else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+        });
+        $("videoWrap").addEventListener("dblclick", function () { $("fsBtn").click(); });
+
+        $("tabPlayer").addEventListener("click", function () { showTab("player"); });
+        $("tabBrowser").addEventListener("click", function () { showTab("browser"); });
+        $("openTabBtn").addEventListener("click", function () {
+          if (browserUrl) window.open(browserUrl, "_blank", "noopener");
+        });
+
+        $("loadBtn").addEventListener("click", function () {
+          var url = $("urlInput").value.trim();
+          if (!url) return;
+          loadUrl(url, false);
+          pushState(function (s) {
+            s.url = currentUrl;
+            s.mode = currentMode;
+            s.time = 0;
+            s.playing = false;
+            s.rate = video.playbackRate || 1;
+          });
+          postChat("", (currentMode === "video" ? "Video loaded" : "Page opened in the Shared Browser") + ": " + currentUrl, true, false);
+        });
+        $("urlInput").addEventListener("keydown", function (e) {
+          if (e.key === "Enter") $("loadBtn").click();
+        });
+        $("sampleBtn").addEventListener("click", function () {
+          var u = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+          $("urlInput").value = u;
+          $("loadBtn").click();
+        });
+
+        /* ================= Chat form ================= */
+        $("chatForm").addEventListener("submit", function (e) {
+          e.preventDefault();
+          var inp = $("chatInput");
+          var text = inp.value.trim();
+          if (!text) return;
+          inp.value = "";
+          postChat(myName, text, false, false);
+        });
+
+        /* ================= Landing actions ================= */
+        $("createBtn").addEventListener("click", createRoom);
+        $("joinBtn").addEventListener("click", function () {
+          var code = $("joinCode").value.trim().toUpperCase();
+          if (code.length !== 6) { $("landErr").textContent = "Enter the 6-letter room code."; return; }
+          $("landErr").textContent = "";
+          joinRoom(code);
+        });
+        $("joinCode").addEventListener("keydown", function (e) {
+          if (e.key === "Enter") $("joinBtn").click();
+        });
+        $("leaveBtn").addEventListener("click", function () {
+          if (myCode) {
+            pushState(function (s) { delete s.members[myId]; delete s.buf[myId]; });
+          }
+          location.reload();
+        });
+
+        function copyText(text, btn, doneLabel) {
+          var old = btn.textContent;
+          function done() {
+            btn.textContent = doneLabel;
+            setTimeout(function () { btn.textContent = old; }, 1600);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(done);
+          } else {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand("copy"); } catch (e) {}
+            ta.remove();
+            done();
+          }
+        }
+        $("copyCodeBtn").addEventListener("click", function () { copyText(myCode, this, "Copied"); });
+
+        /* Auto-join from ?room=CODE link */
+        (function () {
+          try {
+            var params = new URLSearchParams(location.search);
+            var rc = (params.get("room") || "").toUpperCase();
+            if (/^[A-Z0-9]{6}$/.test(rc)) {
+              $("joinCode").value = rc;
+              $("landErr").textContent = "Room code " + rc + " filled in from your link — press Join Room.";
+            }
+          } catch (e) {}
+        })();
+      })();
+    </script>
+
+  </body>
+</html>
