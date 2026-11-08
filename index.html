@@ -466,17 +466,32 @@
             return kvPut(myCode, s);
           });
         }
-        /* Lightweight time write (host heartbeat while playing): PUT the
-           cached state with a fresh time, no GET first. */
+        /* Time write (heartbeat while playing): GET latest first and never
+           overwrite a newer pause from the other side — the old fire-and-
+           forget PUT could resurrect playback seconds after the partner
+           had paused it. */
         function pushTime() {
           if (!roomState) return;
-          roomState.time = video.currentTime || 0;
-          roomState.playing = !video.paused;
-          roomState.rate = video.playbackRate || 1;
-          roomState.updatedAt = Date.now();
-          roomState.updatedBy = myId;
-          roomState.members[myId] = { name: myName, seen: Date.now() };
-          kvPut(myCode, roomState);
+          kvGet(myCode).then(function (latest) {
+            if (latest && latest.updatedBy && latest.updatedBy !== myId &&
+                latest.playing === false && (latest.updatedAt || 0) > (roomState.updatedAt || 0)) {
+              roomState = latest;
+              if (!video.paused) { applyingRemote = true; video.pause(); setTimeout(function () { applyingRemote = false; }, 350); }
+              return;
+            }
+            var s = latest || roomState;
+            s.chat = mergeChat(s.chat, roomState.chat);
+            s.buf = Object.assign({}, s.buf, roomState.buf);
+            s.members = Object.assign({}, s.members, roomState.members);
+            s.time = video.currentTime || 0;
+            s.playing = !video.paused;
+            s.rate = video.playbackRate || 1;
+            s.updatedAt = Date.now();
+            s.updatedBy = myId;
+            s.members[myId] = { name: myName, seen: Date.now() };
+            roomState = s;
+            kvPut(myCode, s);
+          }).catch(function () {});
         }
         function touchPresence() {
           lastPresencePut = Date.now();
@@ -603,7 +618,7 @@
               if (Math.abs(drift) > DRIFT_S && !video.seeking) {
                 applyRemote(function () { try { video.currentTime = exp; } catch (e) {} });
               }
-              if (s.playing && video.paused) applyRemote(function () { video.play().catch(function () {}); });
+              if (s.playing && video.paused) applyRemote(function () { video.play().catch(function () { showTapToPlay(); }); });
               if (!s.playing && !video.paused) applyRemote(function () { video.pause(); });
               if (s.rate && video.playbackRate !== s.rate) {
                 applyRemote(function () {
@@ -771,7 +786,54 @@
         });
         video.addEventListener("loadedmetadata", function () {
           $("timeLabel").textContent = fmt(video.currentTime) + " / " + fmt(video.duration);
+          /* Metadata just arrived (e.g. guest side after a remote load):
+             apply the room's current state now instead of waiting for the
+             next poll — seek to where the other side is, play if playing. */
+          if (roomState && roomState.mode === "video" && roomState.updatedBy && roomState.updatedBy !== myId) {
+            var exp = expectedTime(roomState);
+            if (Math.abs(video.currentTime - exp) > DRIFT_S && isFinite(exp)) {
+              try { video.currentTime = exp; } catch (e) {}
+            }
+            if (roomState.playing && video.paused) {
+              applyRemote(function () { video.play().catch(function () { showTapToPlay(); }); });
+            }
+          }
         });
+        /* The video file itself failed (bad link, blocked host, no net):
+           say so loudly instead of a black screen — the old "Video loaded"
+           chat line was only the link being shared, not the video working. */
+        var videoErrShown = false;
+        video.addEventListener("error", function () {
+          var el = $("emptyState");
+          el.style.display = "flex";
+          el.innerHTML = "";
+          var b = document.createElement("span");
+          b.className = "big";
+          b.textContent = "VIDEO COULD NOT LOAD";
+          var s = document.createElement("span");
+          s.textContent = "This link did not play on your device (blocked host, dead link or slow connection). Try the sample video again, or paste another direct .mp4 / .m3u8 link.";
+          el.appendChild(b);
+          el.appendChild(s);
+          if (!videoErrShown) {
+            videoErrShown = true;
+            addSys("Video failed to load on your side — the link may be blocked or dead. Try another link.", true);
+          }
+        });
+        video.addEventListener("canplay", function () { videoErrShown = false; });
+        function showTapToPlay() {
+          var el = $("emptyState");
+          el.style.display = "flex";
+          el.innerHTML = "";
+          var b = document.createElement("span");
+          b.className = "big";
+          b.textContent = "TAP PLAY TO START";
+          var s = document.createElement("span");
+          s.textContent = "Your browser blocked auto-play with sound. Tap the play button once — after that, play and pause will stay in sync.";
+          el.appendChild(b);
+          el.appendChild(s);
+          addSys("Tap play once on your side — the browser blocked auto-play with sound.", true);
+        }
+        video.addEventListener("play", function () { $("emptyState").style.display = "none"; });
 
         function setBuffering(on) {
           if (localBuffering === on) return;
@@ -833,7 +895,7 @@
             s.playing = false;
             s.rate = video.playbackRate || 1;
           });
-          postChat("", (currentMode === "video" ? "Video loaded" : "Page opened in the Shared Browser") + ": " + currentUrl, true, false);
+          postChat("", (currentMode === "video" ? "Video link shared" : "Page opened in the Shared Browser") + ": " + currentUrl, true, false);
         });
         $("urlInput").addEventListener("keydown", function (e) {
           if (e.key === "Enter") $("loadBtn").click();
