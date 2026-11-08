@@ -217,40 +217,46 @@
 
     <!-- ============ LANDING ============ -->
     <section id="landing" class="landing">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+        <select id="langSelLanding" class="speed-sel" style="height:42px;padding:8px 10px;font-size:14px" aria-label="Language">
+          <option value="en">English</option>
+          <option value="ur">اردو (Roman)</option>
+        </select>
+      </div>
       <h1 class="marquee">WATCH <span class="gold">PARTY</span></h1>
-      <p class="tagline">One room, one movie, two screens — perfectly in sync. Create a room, share the code, and press play together. No screen-sharing lag, no stutter: the video loads on each person's own device, only the timing travels between you.</p>
-      <p class="no-signup">No signup. No account. No payment. Just a room code.</p>
+      <p class="tagline" data-i18n="tagline">One room, one movie, two screens — perfectly in sync. Create a room, share the code, and press play together. No screen-sharing lag, no stutter: the video loads on each person's own device, only the timing travels between you.</p>
+      <p class="no-signup" data-i18n="nosignup">No signup. No account. No payment. Just a room code.</p>
 
       <div class="name-row">
-        <label for="nameInput">Your name (shown in chat)</label>
+        <label for="nameInput" data-i18n="yourname">Your name (shown in chat)</label>
         <input id="nameInput" class="field" type="text" maxlength="24" placeholder="e.g. Abdul" autocomplete="off" />
       </div>
 
       <div class="cards">
         <div class="card">
-          <h2>Create a room</h2>
-          <p>Start a new watch party and get a short room code to send to your partner — they join with just that code.</p>
-          <button id="createBtn" class="btn block">Create Room</button>
+          <h2 data-i18n="createTitle">Create a room</h2>
+          <p data-i18n="createText">Start a new watch party and get a short room code to send to your partner — they join with just that code.</p>
+          <button id="createBtn" class="btn block" data-i18n="createBtn">Create Room</button>
         </div>
         <div class="card join-card">
-          <h2>Join a room</h2>
-          <p>Got a code from your partner? Enter it here and you're in — the movie syncs to wherever they are.</p>
+          <h2 data-i18n="joinTitle">Join a room</h2>
+          <p data-i18n="joinText">Got a code from your partner? Enter it here and you're in — the movie syncs to wherever they are.</p>
           <div class="join-row">
             <input id="joinCode" class="field code-input" type="text" maxlength="6" placeholder="------" autocomplete="off" spellcheck="false" />
-            <button id="joinBtn" class="btn ghost block">Join Room</button>
+            <button id="joinBtn" class="btn ghost block" data-i18n="joinBtn">Join Room</button>
           </div>
         </div>
       </div>
       <p id="landErr" class="err"></p>
 
       <div class="steps">
-        <div class="step"><span class="num">01</span><b>Create &amp; share</b><span>One person creates a room and shares the 6-letter code.</span></div>
-        <div class="step"><span class="num">02</span><b>Paste a link</b><span>Drop in a direct video link (MP4, WebM, HLS stream) or a free streaming site's page.</span></div>
-        <div class="step"><span class="num">03</span><b>Watch together</b><span>Play, pause, seek and speed changes happen on both screens at the same moment. Chat alongside.</span></div>
+        <div class="step"><span class="num">01</span><b data-i18n="step1t">Create &amp; share</b><span data-i18n="step1x">One person creates a room and shares the 6-letter code.</span></div>
+        <div class="step"><span class="num">02</span><b data-i18n="step2t">Paste a link</b><span data-i18n="step2x">Drop in a direct video link (MP4, WebM, HLS stream) or a free streaming site's page.</span></div>
+        <div class="step"><span class="num">03</span><b data-i18n="step3t">Watch together</b><span data-i18n="step3x">Play, pause, seek and speed changes happen on both screens at the same moment. Chat alongside.</span></div>
       </div>
 
       <div class="honest">
-        <b>One honest note:</b> Netflix, Prime Video and similar paid platforms block other websites from embedding their pages, so they can't play inside the shared browser here — no tool can change that. For those, use a direct video/stream link in the player instead. Free streaming sites that allow embedding will open in the Shared Browser tab.
+        <b data-i18n="honestT">One honest note:</b> <span data-i18n="honestX">Netflix, Prime Video and similar paid platforms block other websites from embedding their pages, so they can't play inside the shared browser here — no tool can change that. For those, use a direct video/stream link in the player instead. Free streaming sites that allow embedding will open in the Shared Browser tab.</span>
       </div>
     </section>
 
@@ -267,28 +273,34 @@
           <span class="status-pill"><span id="statusDot" class="dot wait"></span><span id="statusText">Connecting…</span></span>
           <span class="status-pill" id="countPill">1 watching</span>
           <span class="spacer"></span>
+          <select id="langSel" class="speed-sel" style="height:42px;padding:8px 10px;font-size:14px" aria-label="Language">
+            <option value="en">English</option>
+            <option value="ur">اردو (Roman)</option>
+          </select>
           <button id="leaveBtn" class="btn small ghost" type="button">Leave room</button>
         </div>
 
         <div class="url-bar">
           <input id="urlInput" class="field" type="url" placeholder="Paste a video link (mp4 / webm / .m3u8) or a streaming site link, then press Load" autocomplete="off" spellcheck="false" />
-          <button id="loadBtn" class="btn" type="button">Load</button>
+          <button id="loadBtn" class="btn" type="button" data-i18n="loadBtn">Load</button>
         </div>
-        <p class="url-hint">Direct video files and HLS streams play in the synced player. Other site links open in the Shared Browser tab. <button type="button" id="sampleBtn">Load a sample video to test sync</button> <button type="button" id="cinehdBtn">Open CineHD in Shared Browser</button></p>
+        <p class="url-hint"><span data-i18n="urlHint">Direct video files and HLS streams play in the synced player. Other site links open in the Shared Browser tab.</span> <button type="button" id="sampleBtn" data-i18n="sampleBtn">Load a sample video to test sync</button> <button type="button" id="cinehdBtn">Open CineHD in Shared Browser</button></p>
 
         <div class="room-grid">
           <div class="stage">
             <div class="tabs">
-              <button class="tab active" id="tabPlayer" type="button">Video Player</button>
-              <button class="tab" id="tabBrowser" type="button">Shared Browser</button>
-              <button class="tab" id="tabScreen" type="button">Live Screen <span id="screenDot" class="dot" style="display:none"></span></button>
-              <button class="tab" id="tabMovies" type="button">Movies</button>
+              <button class="tab active" id="tabPlayer" type="button" data-i18n="tabPlayer">Video Player</button>
+              <button class="tab" id="tabBrowser" type="button" data-i18n="tabBrowser">Shared Browser</button>
+              <button class="tab" id="tabScreen" type="button"><span data-i18n="tabScreen">Live Screen</span> <span id="screenDot" class="dot" style="display:none"></span></button>
+              <button class="tab" id="tabMovies" type="button" data-i18n="tabMovies">Movies</button>
             </div>
 
             <div id="panePlayer">
               <div class="player-shell" id="playerShell">
                 <div class="video-wrap" id="videoWrap">
-                  <video id="video" playsinline preload="auto"></video>
+                  <video id="video" playsinline preload="auto" crossorigin="anonymous">
+                    <track id="subTrack" kind="subtitles" label="Subtitles" srclang="en" />
+                  </video>
                   <div class="empty-state" id="emptyState">
                     <span class="big">NOTHING LOADED YET</span>
                     <span>Paste a direct video or stream link above and press Load.<br />It will start on everyone's screen at the same time.</span>
@@ -331,10 +343,23 @@
                       <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
                     </button>
                   </div>
-                  <p class="sync-line" id="syncLine">Sync is peer-to-peer — play, pause, seek and speed changes go straight to the other screen; the server is only a backup.</p>
+                  <p class="sync-line" id="syncLine">Sync runs through the room server — play, pause, seek and speed changes land on both screens, usually within a second. If either side buffers, both pause together and resume together.</p>
                 </div>
               </div>
               <div class="peer-buffer" id="peerBuffer"></div>
+              <div class="sub-row" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+                <input id="subUrl" class="field" style="flex:1 1 220px;padding:9px 12px;font-size:14px" placeholder="Subtitle file link (.vtt / .srt) — loads on both screens" autocomplete="off" />
+                <select id="subLang" class="speed-sel" style="height:42px;padding:8px 10px;font-size:14px" aria-label="Subtitle language">
+                  <option value="en">English subs</option>
+                  <option value="ur">Urdu subs</option>
+                  <option value="hi">Hindi subs</option>
+                  <option value="ar">Arabic subs</option>
+                  <option value="es">Spanish subs</option>
+                  <option value="fr">French subs</option>
+                </select>
+                <button id="subLoadBtn" class="btn small" type="button">Load subtitles</button>
+                <button id="subOffBtn" class="btn small ghost" type="button">Off</button>
+              </div>
             </div>
 
             <div id="paneScreen" class="hidden">
@@ -350,6 +375,7 @@
                   <div class="btn-row">
                     <button class="btn" id="shareScreenBtn" type="button">Share my screen</button>
                     <button class="btn ghost" id="stopShareBtn" type="button" disabled>Stop sharing</button>
+                    <button class="btn ghost" id="screenUnmuteBtn" type="button" style="display:none">Unmute</button>
                     <span class="sync-line" id="screenStatus" style="margin-top:0">Screen sharing is the way to watch CineHD together: the host plays it on their own screen, the partner watches that same screen live.</span>
                   </div>
                 </div>
@@ -366,11 +392,24 @@
                 <p class="url-hint" id="movieStatus">Loading popular films…</p>
                 <div id="movieResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
                 <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
-                <p style="margin:0 0 12px;color:var(--ink-2);font-size:14px"><b style="color:var(--ink)">New movies &amp; shows (TMDB)</b> — search any recent film, pick it, and the same player opens on both sides. The player is a free embed (VidSrc &amp; co.), so play/pause inside it cannot be driven from outside: the host uses the Play/Pause buttons in the Shared Browser tab and the other side gets a pop-up to press the same button.</p>
+                <p style="margin:0 0 12px;color:var(--ink-2);font-size:14px"><b style="color:var(--ink)">New movies &amp; shows (TMDB)</b> — <span data-i18n="tmdbIntro">search any recent film or show, pick it, and the site automatically finds a working server for it. The player is a free embed, so play/pause inside it cannot be driven from outside: the host uses the Play/Pause buttons in the Shared Browser tab and the other side gets a pop-up to press the same button. Movies that play in the Video Player tab (direct links, archive films) are fully synced with our own buttons.</span></p>
                 <div class="url-bar" style="margin-top:0">
                   <input id="tmdbSearch" class="field" type="text" placeholder="Search new movies, e.g. Dune, Avatar, Interstellar…" autocomplete="off" />
-                  <button id="tmdbSearchBtn" class="btn" type="button">Search</button>
-                  <button id="tmdbPopularBtn" class="btn ghost" type="button">Popular now</button>
+                  <select id="tmdbKindSel" class="speed-sel" style="height:52px;padding:8px 10px;font-size:14px" aria-label="Movies or TV">
+                    <option value="movie">Movies</option>
+                    <option value="tv">TV Shows</option>
+                  </select>
+                  <select id="tmdbLangSel" class="speed-sel" style="height:52px;padding:8px 10px;font-size:14px" aria-label="Results language">
+                    <option value="en-US">English</option>
+                    <option value="ur-PK">Urdu</option>
+                    <option value="hi-IN">Hindi</option>
+                    <option value="ar-SA">Arabic</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="fr-FR">French</option>
+                    <option value="tr-TR">Turkish</option>
+                  </select>
+                  <button id="tmdbSearchBtn" class="btn" type="button" data-i18n="searchBtn">Search</button>
+                  <button id="tmdbPopularBtn" class="btn ghost" type="button" data-i18n="popularBtn">Popular now</button>
                 </div>
                 <p class="url-hint" id="tmdbStatus"></p>
                 <div id="tmdbResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
@@ -391,14 +430,15 @@
                   <button class="btn" id="cinehdOpenBtn" type="button">Open CineHD in a new tab</button>
                 </div>
                 <div class="browser-note" id="embedServers" style="display:none;flex-wrap:wrap">
-                  <span style="flex-basis:100%">Movie servers — if one does not load, try another. Same film, same room:</span>
-                  <button class="btn small" data-server="vidsrc" type="button">VidSrc</button>
-                  <button class="btn small ghost" data-server="vidsrc2" type="button">VidSrc 2</button>
-                  <button class="btn small ghost" data-server="wave" type="button">EmbedWave</button>
+                  <span style="flex-basis:100%">Movie servers — the site auto-picks the first one that answers; if it stays blank, try another. Same film, same room:</span>
+                  <button class="btn small" data-server="wave" type="button">EmbedWave</button>
                   <button class="btn small ghost" data-server="vidsrc3" type="button">VidSrc 3</button>
-                  <button class="btn small ghost" data-server="2embed" type="button">2Embed</button>
                   <button class="btn small ghost" data-server="vidlink" type="button">Vidlink</button>
                   <button class="btn small ghost" data-server="multi" type="button">MultiEmbed</button>
+                  <button class="btn small ghost" data-server="vidsrcme" type="button">VidSrc.me</button>
+                  <button class="btn small ghost" data-server="vidsrc" type="button">VidSrc</button>
+                  <button class="btn small ghost" data-server="vidsrc2" type="button">VidSrc 2</button>
+                  <button class="btn small ghost" data-server="2embed" type="button">2Embed</button>
                 </div>
                 <div class="browser-note" id="embedActions" style="display:none;flex-wrap:wrap">
                   <span style="flex-basis:100%">Host controls — the player inside the frame cannot be driven from outside, so these send a pop-up to your partner instead:</span>
@@ -464,6 +504,64 @@
         function isHls(u) { return /\.m3u8(\?|#|$)/i.test(u); }
         function clientId() {
           return "c" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+        }
+
+        /* ================= Languages (UI English / Roman Urdu) ==========
+           The toggle swaps the main chrome between English and Roman
+           Urdu. Dynamic strings that already are Roman Urdu stay as
+           they are. The choice is remembered on this device. */
+        var I18N = {
+          en: {
+            tagline: "One room, one movie, two screens — perfectly in sync. Create a room, share the code, and press play together. No screen-sharing lag, no stutter: the video loads on each person's own device, only the timing travels between you.",
+            nosignup: "No signup. No account. No payment. Just a room code.",
+            yourname: "Your name (shown in chat)",
+            createTitle: "Create a room", createText: "Start a new watch party and get a short room code to send to your partner — they join with just that code.", createBtn: "Create Room",
+            joinTitle: "Join a room", joinText: "Got a code from your partner? Enter it here and you're in — the movie syncs to wherever they are.", joinBtn: "Join Room",
+            step1t: "Create & share", step1x: "One person creates a room and shares the 6-letter code.",
+            step2t: "Paste a link", step2x: "Drop in a direct video link (MP4, WebM, HLS stream) or a free streaming site's page.",
+            step3t: "Watch together", step3x: "Play, pause, seek and speed changes happen on both screens at the same moment. Chat alongside.",
+            honestT: "One honest note:", honestX: "Netflix, Prime Video and similar paid platforms block other websites from embedding their pages, so they can't play inside the shared browser here — no tool can change that. For those, use a direct video/stream link in the player instead. Free streaming sites that allow embedding will open in the Shared Browser tab.",
+            loadBtn: "Load", sampleBtn: "Load a sample video to test sync",
+            urlHint: "Direct video files and HLS streams play in the synced player. Other site links open in the Shared Browser tab.",
+            tabPlayer: "Video Player", tabBrowser: "Shared Browser", tabScreen: "Live Screen", tabMovies: "Movies",
+            searchBtn: "Search", popularBtn: "Popular now",
+            tmdbIntro: "search any recent film or show, pick it, and the site automatically finds a working server for it. The player is a free embed, so play/pause inside it cannot be driven from outside: the host uses the Play/Pause buttons in the Shared Browser tab and the other side gets a pop-up to press the same button. Movies that play in the Video Player tab (direct links, archive films) are fully synced with our own buttons.",
+            guestSync: "Only the room creator controls playback — you follow along in sync. Chat works for both sides."
+          },
+          ur: {
+            tagline: "Aik room, aik film, do screens — bilkul aik saath. Room banao, code share karo, aur aik saath play dabao. Video har aik ki apni device par apne internet se chalti hai, sirf timing aik dusre tak jati hai.",
+            nosignup: "Na signup, na account, na payment. Sirf aik room code.",
+            yourname: "Apna naam (chat me dikhe ga)",
+            createTitle: "Room banao", createText: "Nayi watch party shuru karo aur apne partner ko chhota sa room code bhejo — wo sirf us code se join ho jaye ga.", createBtn: "Room Banao",
+            joinTitle: "Room join karo", joinText: "Partner se code mila hai? Yahan likho aur andar — film wahi se sync ho jaye gi jahan wo hain.", joinBtn: "Room Join Karo",
+            step1t: "Banao aur share karo", step1x: "Aik banda room banata hai aur 6 harf ka code share karta hai.",
+            step2t: "Link lagao", step2x: "Direct video link (MP4, WebM, HLS stream) ya kisi free streaming site ka page lagao.",
+            step3t: "Aik saath dekho", step3x: "Play, pause, seek aur speed dono screens par aik hi waqt hoti hai. Saath chat bhi karo.",
+            honestT: "Aik seedhi baat:", honestX: "Netflix, Prime Video aur aisi paid platforms apne pages ko dusri website ke andar khulne nahi deti, is liye wo yahan shared browser me nahi chal sakti — is ko koi tool nahi badal sakta. Un ke liye player me direct video/stream link use karo. Free streaming sites jo embedding ki ijazat deti hain, wo Shared Browser tab me khul jayein gi.",
+            loadBtn: "Load", sampleBtn: "Sync test karne ke liye sample video lagao",
+            urlHint: "Direct video files aur HLS streams synced player me chalti hain. Dusri site ke links Shared Browser tab me khulte hain.",
+            tabPlayer: "Video Player", tabBrowser: "Shared Browser", tabScreen: "Live Screen", tabMovies: "Movies",
+            searchBtn: "Dhoondo", popularBtn: "Popular abhi",
+            tmdbIntro: "koi bhi nayi film ya show dhoondo, chuno, aur site khud us ke liye kaam karne wala server dhoond leti hai. Player aik free embed hai, is liye us ke andar play/pause bahar se nahi chal sakta: host Shared Browser tab ke Play/Pause button use karta hai aur dusri taraf pop-up aata hai ke wahi button dabao. Jo filmein Video Player tab me chalti hain (direct links, archive films) wo hamare apne buttons se poori tarah sync hoti hain.",
+            guestSync: "Sirf room banane wala playback control karta hai — tum us ke saath sync me chalte ho. Chat dono taraf se chalti hai."
+          }
+        };
+        var currentLang = "en";
+        try { currentLang = localStorage.getItem("wp-lang") || "en"; } catch (e) {}
+        if (!I18N[currentLang]) currentLang = "en";
+        function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key; }
+        function applyLang(lang) {
+          if (!I18N[lang]) lang = "en";
+          currentLang = lang;
+          try { localStorage.setItem("wp-lang", lang); } catch (e) {}
+          try { document.documentElement.lang = lang === "ur" ? "ur" : "en"; } catch (e) {}
+          Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (el) {
+            var k = el.getAttribute("data-i18n");
+            if (I18N[lang][k]) el.textContent = I18N[lang][k];
+          });
+          var s1 = $("langSel"), s2 = $("langSelLanding");
+          if (s1) s1.value = lang;
+          if (s2) s2.value = lang;
         }
 
         /* ================= Server sync (Vercel Blob KV backend) =================
@@ -589,6 +687,7 @@
             playing: false, rate: 1, updatedAt: Date.now(), updatedBy: myId,
             driver: "", screen: { on: false, by: "" },
             embedTmdb: "", embedAction: null, chat: [], buf: {}, members: {},
+            embedServer: "", embedType: "movie",
             /* timeAt: when `time` was captured. expectedTime() extrapolates
                from here — NEVER from updatedAt, which every chat / presence /
                buffering write bumps. (The old code used updatedAt, so a
@@ -1011,6 +1110,8 @@
            room state only carries "screen on/off" so the guest knows
            when to connect. */
         var screenPeer = null, screenCall = null, screenStream = null;
+        var screenPeerReady = false, pendingScreenCalls = [];
+        var screenGuestPeer = null, screenGuestTries = 0, screenGuestTimer = null;
         var screenSharing = false;
         function screenPeerId() { return "wp-screen-" + myCode; }
         function ensureScreenPeer() {
@@ -1019,9 +1120,17 @@
              server in the middle when the two devices can reach each
              other directly) — that is the lowest-latency path available. */
           screenPeer = new Peer(screenPeerId(), { config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+          screenPeer.on("open", function () {
+            screenPeerReady = true;
+            /* Answer any calls that arrived before the stream was ready. */
+            pendingScreenCalls.forEach(function (call) {
+              if (screenStream) { try { call.answer(screenStream); } catch (e) {} }
+            });
+            pendingScreenCalls = [];
+          });
           screenPeer.on("call", function (call) {
             if (screenStream) call.answer(screenStream);
-            else call.close();
+            else pendingScreenCalls.push(call);
           });
           screenPeer.on("error", function () {});
           return screenPeer;
@@ -1046,6 +1155,12 @@
             try { stream.getVideoTracks().forEach(function (t) { t.contentHint = "motion"; }); } catch (e) {}
             screenSharing = true;
             ensureScreenPeer();
+            /* Answer any guest calls that arrived while the peer was
+               still registering. */
+            if (screenPeerReady) {
+              pendingScreenCalls.forEach(function (c) { try { c.answer(screenStream); } catch (e) {} });
+              pendingScreenCalls = [];
+            }
             $("screenEmpty").style.display = "none";
             var v = $("screenVideo");
             v.srcObject = stream;
@@ -1056,55 +1171,113 @@
             $("screenStatus").textContent = "You are sharing your screen — your partner can watch it live in the Live Screen tab.";
             setScreenState(true);
             postChat("", myName + " started sharing their screen", true, false);
-            stream.getVideoTracks()[0].addEventListener("ended", stopScreenShare);
+            var vt = stream.getVideoTracks();
+            if (vt.length) vt[0].addEventListener("ended", stopScreenShare);
           }).catch(function () {
             $("screenStatus").textContent = "Screen sharing was not allowed. Allow it in the browser prompt and try again.";
           });
         });
         function stopScreenShare() {
           if (screenStream) { screenStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} }); screenStream = null; }
+          pendingScreenCalls = [];
+          screenPeerReady = false;
           if (screenPeer) { try { screenPeer.destroy(); } catch (e) {} screenPeer = null; }
           screenSharing = false;
           $("screenVideo").srcObject = null;
           $("screenEmpty").style.display = "flex";
           $("shareScreenBtn").disabled = !isHost;
           $("stopShareBtn").disabled = true;
+          $("screenUnmuteBtn").style.display = "none";
           $("screenStatus").textContent = "Screen sharing stopped.";
           setScreenState(false);
         }
         $("stopShareBtn").addEventListener("click", stopScreenShare);
         /* Guest side: when the room says a screen is live, call the
-           host's screen peer and show the stream. */
+           host's screen peer and show the stream. One reused peer, up
+           to 5 tries with backoff — the old code created a brand-new
+           Peer on every poll and never retried cleanly, so a call that
+           arrived before the host's peer had registered just died
+           silently. The stream starts MUTED (browsers block autoplay
+           with sound without a tap); the Unmute button is the tap. */
         function maybeJoinScreen(s) {
           var on = !!(s.screen && s.screen.on);
           $("screenDot").style.display = on ? "" : "none";
           $("screenDot").className = "dot" + (on ? " on" : "");
           if (isHost || typeof Peer === "undefined") return;
           if (on && !screenCall) {
-            var peer = new Peer({ config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
-            peer.on("open", function () {
-              screenCall = peer.call(screenPeerId(), new MediaStream());
-              if (!screenCall) return;
-              screenCall.on("stream", function (stream) {
-                var v = $("screenVideo");
-                v.srcObject = stream;
-                v.muted = false;
-                v.play().catch(function () {});
-                $("screenEmpty").style.display = "none";
-                $("screenStatus").textContent = (s.screen.by || "Your partner") + " is sharing their screen — you are watching it live.";
-              });
-              screenCall.on("close", function () { screenCall = null; $("screenVideo").srcObject = null; $("screenEmpty").style.display = "flex"; });
-            });
-            peer.on("error", function () {});
+            if (!screenGuestTimer) tryJoinScreen();
           }
-          if (!on && screenCall) {
-            try { screenCall.close(); } catch (e) {}
-            screenCall = null;
+          if (!on && (screenCall || screenGuestPeer)) {
+            if (screenCall) { try { screenCall.close(); } catch (e) {} screenCall = null; }
+            screenGuestTries = 0;
+            if (screenGuestTimer) { clearTimeout(screenGuestTimer); screenGuestTimer = null; }
+            if (screenGuestPeer) { try { screenGuestPeer.destroy(); } catch (e) {} screenGuestPeer = null; }
             $("screenVideo").srcObject = null;
+            $("screenVideo").muted = false;
+            $("screenUnmuteBtn").style.display = "none";
             $("screenEmpty").style.display = "flex";
             $("screenStatus").textContent = "Screen sharing stopped.";
           }
         }
+        function tryJoinScreen() {
+          if (screenCall || !myCode) return;
+          screenGuestTries++;
+          $("screenStatus").textContent = "Connecting to your partner's screen… (try " + screenGuestTries + " of 5)";
+          if (!screenGuestPeer) {
+            screenGuestPeer = new Peer({ config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+            screenGuestPeer.on("error", function () {});
+          }
+          var peer = screenGuestPeer;
+          var attempted = false;
+          function attempt() {
+            if (attempted || screenCall) return;
+            attempted = true;
+            try {
+              var call = peer.call(screenPeerId(), new MediaStream());
+              if (!call) throw new Error("no call");
+              screenCall = call;
+              call.on("stream", function (stream) {
+                screenGuestTries = 0;
+                var v = $("screenVideo");
+                v.srcObject = stream;
+                v.muted = true;
+                v.play().then(function () {
+                  $("screenEmpty").style.display = "none";
+                  $("screenUnmuteBtn").style.display = "";
+                  $("screenStatus").textContent = "Watching your partner's screen live — tap Unmute for sound.";
+                }).catch(function () {
+                  $("screenStatus").textContent = "Screen stream arrived but would not play — tap the video once, then try again.";
+                });
+              });
+              call.on("close", function () {
+                if (screenCall === call) screenCall = null;
+                scheduleScreenRetry();
+              });
+              call.on("error", function () {
+                if (screenCall === call) screenCall = null;
+                scheduleScreenRetry();
+              });
+            } catch (e) { scheduleScreenRetry(); }
+          }
+          if (peer.open) attempt();
+          else peer.on("open", attempt);
+        }
+        function scheduleScreenRetry() {
+          if (screenCall) return;
+          if (screenGuestTries >= 5) {
+            $("screenStatus").textContent = "Could not connect to the screen after 5 tries. Ask the host to stop sharing and share again.";
+            return;
+          }
+          var delay = Math.min(8000, 1000 * Math.pow(2, screenGuestTries - 1));
+          screenGuestTimer = setTimeout(function () { screenGuestTimer = null; tryJoinScreen(); }, delay);
+        }
+        $("screenUnmuteBtn").addEventListener("click", function () {
+          var v = $("screenVideo");
+          v.muted = false;
+          v.play().catch(function () {});
+          $("screenUnmuteBtn").style.display = "none";
+          $("screenStatus").textContent = "Watching your partner's screen live with sound.";
+        });
 
         /* ================= Movies catalog (Internet Archive) ==========
            Our own built-in movie library, so no other site is needed:
@@ -1188,6 +1361,7 @@
             pushState(function (s) {
               s.url = currentUrl; s.mode = currentMode; s.time = 0;
               s.playing = false; s.rate = video.playbackRate || 1; s.driver = myId;
+              s.hold = { on: false, by: "", time: 0 };
             });
             postChat("", "Movie loaded: " + (title || id), true, false);
             showTab("player");
@@ -1209,6 +1383,8 @@
            image.tmdb.org. Picking a title hands its TMDB id to
            playEmbedMovie() above. */
         var TMDB_API_KEY = "16890f57fbd97da0e1f42fdd5c0a0d92";
+        function tmdbKind() { var el = $("tmdbKindSel"); return (el && el.value) || "movie"; }
+        function tmdbLang() { var el = $("tmdbLangSel"); return (el && el.value) || "en-US"; }
         function tmdbFetch(path, statusText) {
           var st = $("tmdbStatus");
           if (!TMDB_API_KEY || TMDB_API_KEY === "PASTE_TMDB_KEY_HERE") {
@@ -1216,7 +1392,7 @@
             return;
           }
           st.textContent = statusText;
-          fetch("https://api.themoviedb.org/3" + path + (path.indexOf("?") === -1 ? "?" : "&") + "api_key=" + TMDB_API_KEY + "&language=en-US")
+          fetch("https://api.themoviedb.org/3" + path + (path.indexOf("?") === -1 ? "?" : "&") + "api_key=" + TMDB_API_KEY + "&language=" + encodeURIComponent(tmdbLang()))
             .then(function (r) { return r.json(); }).then(function (j) {
               var box = $("tmdbResults");
               box.innerHTML = "";
@@ -1244,7 +1420,7 @@
                 btn.type = "button";
                 btn.textContent = isHost ? "Play together" : "Host picks the film";
                 btn.disabled = !isHost;
-                btn.addEventListener("click", function () { playEmbedMovie(m.id, m.title || m.name); });
+                btn.addEventListener("click", function () { playEmbedMovie(m.id, m.title || m.name, tmdbKind()); });
                 body.appendChild(t); body.appendChild(y); body.appendChild(btn);
                 card.appendChild(img); card.appendChild(body);
                 box.appendChild(card);
@@ -1255,47 +1431,130 @@
         }
         $("tmdbSearchBtn").addEventListener("click", function () {
           var q = $("tmdbSearch").value.trim();
-          if (q) tmdbFetch("/search/movie?query=" + encodeURIComponent(q), "Searching TMDB…");
+          if (q) tmdbFetch("/search/" + tmdbKind() + "?query=" + encodeURIComponent(q), "Searching TMDB…");
         });
         $("tmdbSearch").addEventListener("keydown", function (e) {
           if (e.key === "Enter") $("tmdbSearchBtn").click();
         });
         $("tmdbPopularBtn").addEventListener("click", function () {
-          tmdbFetch("/movie/popular", "Loading popular titles…");
+          tmdbFetch("/" + tmdbKind() + "/popular", "Loading popular titles…");
         });
 
+        /* ================= Subtitles (per-side, via the Worker proxy) ==
+           Each side loads their own subtitle file — different languages
+           per person is fine. The URL goes through /v1/sub so any host
+           works (no CORS problem) and .srt files are converted to
+           WebVTT server-side. The track is rebuilt (not just re-src'd)
+           because browsers do not reliably reload a track in place. */
+        var currentSubUrl = "";
+        function applySubtitle(url, lang) {
+          currentSubUrl = url || "";
+          var old = $("subTrack");
+          if (old) old.remove();
+          if (!url) return;
+          var track = document.createElement("track");
+          track.id = "subTrack";
+          track.kind = "subtitles";
+          track.label = "Subtitles";
+          track.srclang = lang || "en";
+          track.src = API_BASE + "/v1/sub?url=" + encodeURIComponent(url);
+          track.default = true;
+          video.appendChild(track);
+          try { track.mode = "showing"; } catch (e) {}
+        }
+        function clearSubtitle() { applySubtitle("", "en"); }
+        $("subLoadBtn").addEventListener("click", function () {
+          var url = $("subUrl").value.trim();
+          if (!url) return;
+          applySubtitle(url, $("subLang").value || "en");
+        });
+        $("subOffBtn").addEventListener("click", function () {
+          clearSubtitle();
+          $("subUrl").value = "";
+        });
         /* ================= Embed movie servers (TMDB + VidSrc & co.) ====
            CineHD gives no API key, so the room uses the same pieces
            CineHD itself is built from: TMDB for search/posters, and
            free embed players (no key needed) addressed by TMDB id.
-           Seven servers, same film — if one does not load, tap another.
+           Servers are ordered live-first (checked 2026-11-09: wave,
+           vid-src.top and vidlink answer; vidsrc.in, embed.vidsrc.pk,
+           2embed and vidsrc.cc do not answer from here). The site
+           auto-picks the first server that answers (see autoPickEmbed)
+           — nobody has to tap through dead servers by hand.
            The frame's player cannot be driven from outside, so the host
            sends an action instead and the guest gets a pop-up telling
            them to press the same button in their own player. */
         var EMBED_SERVERS = {
-          vidsrc:  function (id) { return "https://vidsrc.in/embed/movie/" + id; },
-          vidsrc2: function (id) { return "https://embed.vidsrc.pk/movie/" + id; },
-          wave:    function (id) { return "https://embedwave.cc/embed/movie/" + id; },
-          vidsrc3: function (id) { return "https://vid-src.top/embed/movie/" + id; },
-          "2embed": function (id) { return "https://www.2embed.cc/embed/" + id; },
-          vidlink: function (id) { return "https://vidlink.pro/movie/" + id; },
-          multi:   function (id) { return "https://multiembed.mov/?video_id=" + id + "&tmdb=1"; }
+          wave:    { movie: function (id) { return "https://embedwave.cc/embed/movie/" + id; },
+                     tv: function (id, s, e) { return "https://embedwave.cc/embed/tv/" + id + "/" + s + "/" + e; } },
+          vidsrc3: { movie: function (id) { return "https://vid-src.top/embed/movie/" + id; },
+                     tv: function (id, s, e) { return "https://vid-src.top/embed/tv/" + id + "/" + s + "/" + e; } },
+          vidlink: { movie: function (id) { return "https://vidlink.pro/movie/" + id; },
+                     tv: function (id, s, e) { return "https://vidlink.pro/tv/" + id + "/" + s + "/" + e; } },
+          multi:   { movie: function (id) { return "https://multiembed.mov/?video_id=" + id + "&tmdb=1"; },
+                     tv: function (id, s, e) { return "https://multiembed.mov/?video_id=" + id + "&tmdb=1&s=" + s + "&e=" + e; } },
+          vidsrcme:{ movie: function (id) { return "https://vidsrc.me/embed/movie/" + id; },
+                     tv: function (id, s, e) { return "https://vidsrc.me/embed/tv/" + id + "/" + s + "/" + e; } },
+          vidsrc:  { movie: function (id) { return "https://vidsrc.in/embed/movie/" + id; },
+                     tv: function (id, s, e) { return "https://vidsrc.in/embed/tv/" + id + "/" + s + "/" + e; } },
+          vidsrc2: { movie: function (id) { return "https://embed.vidsrc.pk/movie/" + id; },
+                     tv: function (id, s, e) { return "https://embed.vidsrc.pk/embed/tv/" + id + "/" + s + "/" + e; } },
+          "2embed":{ movie: function (id) { return "https://www.2embed.cc/embed/" + id; },
+                     tv: function (id, s, e) { return "https://www.2embed.cc/embedtv/" + id + "&s=" + s + "&e=" + e; } }
         };
-        function embedUrl(server, tmdbId) {
-          var fn = EMBED_SERVERS[server] || EMBED_SERVERS.vidsrc;
-          return fn(tmdbId);
+        var EMBED_ORDER = ["wave", "vidsrc3", "vidlink", "multi", "vidsrcme", "vidsrc", "vidsrc2", "2embed"];
+        function embedUrl(server, tmdbId, type, season, episode) {
+          var sv = EMBED_SERVERS[server] || EMBED_SERVERS.wave;
+          if (type === "tv") return sv.tv(tmdbId, season || 1, episode || 1);
+          return sv.movie(tmdbId);
         }
-        function playEmbedMovie(tmdbId, title) {
+        function markEmbedServer(server) {
+          Array.prototype.forEach.call(document.querySelectorAll("#embedServers [data-server]"), function (btn) {
+            var on = btn.getAttribute("data-server") === server;
+            btn.classList.toggle("small", true);
+            btn.style.outline = on ? "2px solid var(--accent)" : "";
+          });
+        }
+        /* Auto-chooser: ask the backend which embed servers answer for
+           this title, and load the first live one. No manual tapping
+           through dead servers. Falls back to EmbedWave if the check
+           itself fails. */
+        function autoPickEmbed(tmdbId, title, type) {
+          type = type || "movie";
+          var st = $("tmdbStatus");
+          if (st) st.textContent = "Finding the best server for this title…";
+          fetch(API_BASE + "/v1/embed-check?tmdb=" + encodeURIComponent(tmdbId) + "&type=" + type + "&season=1&episode=1")
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              var best = (j && j.best) || null;
+              var server = best ? best.name : "wave";
+              loadEmbedServer(server, tmdbId, title, type);
+              if (st) st.textContent = best ? ("Playing via " + best.name + " — auto-picked, it answered first.") : "No server answered the check — loaded EmbedWave anyway. If it stays blank, try another server below.";
+            })
+            .catch(function () { loadEmbedServer("wave", tmdbId, title, type); });
+        }
+        function loadEmbedServer(server, tmdbId, title, type) {
           if (!isHost) return;
-          var url = embedUrl("vidsrc", tmdbId);
-          if (roomState) { roomState.embedTmdb = String(tmdbId); }
+          type = type || "movie";
+          var url = embedUrl(server, tmdbId, type, 1, 1);
+          if (roomState) {
+            roomState.embedTmdb = String(tmdbId);
+            roomState.embedServer = server;
+            roomState.embedType = type;
+          }
           $("urlInput").value = url;
           loadUrl(url, false);
           pushState(function (s) {
             s.url = currentUrl; s.mode = currentMode; s.embedTmdb = String(tmdbId);
+            s.embedServer = server; s.embedType = type;
           });
-          postChat("", "Movie loaded: " + (title || tmdbId) + " — press Play in the player on your side", true, false);
+          markEmbedServer(server);
+          postChat("", "Movie loaded: " + (title || tmdbId) + " via " + server + (type === "tv" ? " (TV — Season 1 Episode 1)" : "") + " — press Play in the player on your side", true, false);
           showTab("browser");
+        }
+        function playEmbedMovie(tmdbId, title, type) {
+          if (!isHost) return;
+          autoPickEmbed(tmdbId, title, type || "movie");
         }
         /* Server switch buttons — host only; the new URL syncs to the
            guest through the normal room state. */
@@ -1304,10 +1563,7 @@
             if (!isHost) return;
             var id = roomState && roomState.embedTmdb;
             if (!id) return;
-            var url = embedUrl(btn.getAttribute("data-server"), id);
-            $("urlInput").value = url;
-            loadUrl(url, false);
-            pushState(function (s) { s.url = currentUrl; s.mode = currentMode; });
+            loadEmbedServer(btn.getAttribute("data-server"), id, null, (roomState && roomState.embedType) || "movie");
           });
         });
         /* Host embed-action buttons → room state; guest poll shows the
@@ -1359,7 +1615,7 @@
             if (el) el.disabled = guest;
           });
           if (guest) {
-            $("syncLine").textContent = "Only the room creator controls playback — you follow along in sync. Chat works for both sides.";
+            $("syncLine").textContent = t("guestSync");
           }
           window.scrollTo(0, 0);
         }
@@ -1490,6 +1746,9 @@
           url = (url || "").trim();
           if (!url) return;
           if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+          /* A new film gets a clean subtitle track; each side loads
+             their own subtitles for it. */
+          if (currentUrl && currentUrl !== url) clearSubtitle();
           currentUrl = url;
           $("urlInput").value = url;
           /* Keep the local cache in step too, so a later stale GET-merge
@@ -1833,6 +2092,11 @@
           }
         }
         $("copyCodeBtn").addEventListener("click", function () { copyText(myCode, this, "Copied"); });
+
+        /* Language toggle (landing + room), applied to the saved choice. */
+        $("langSel").addEventListener("change", function () { applyLang(this.value); });
+        $("langSelLanding").addEventListener("change", function () { applyLang(this.value); });
+        applyLang(currentLang);
 
         /* Auto-join from ?room=CODE link */
         (function () {
