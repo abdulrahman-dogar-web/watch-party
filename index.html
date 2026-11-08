@@ -331,7 +331,7 @@
                       <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
                     </button>
                   </div>
-                  <p class="sync-line" id="syncLine">Sync is server-backed — play, pause, seek and speed changes reach the other screen within about 2 seconds.</p>
+                  <p class="sync-line" id="syncLine">Sync is peer-to-peer — play, pause, seek and speed changes go straight to the other screen; the server is only a backup.</p>
                 </div>
               </div>
               <div class="peer-buffer" id="peerBuffer"></div>
@@ -468,14 +468,14 @@
 
         /* ================= Server sync (Vercel Blob KV backend) =================
            No PeerJS, no signalling server. Room state lives in the shared
-           backend at https://apps-backend-tahqeeq.vercel.app
+           backend at https://apps-backend.abdulrahman-dogar.workers.dev
            (PUT/GET /v1/kv/:key). Every client polls the room key every
            1.5 seconds and writes the whole room state on every change
            (play, pause, seek, speed, load, chat, buffering, presence).
            The video itself still loads on each person's own device from
            their own internet — only the timing and chat travel through
            the server. */
-        var API_BASE = "https://apps-backend-tahqeeq.vercel.app";
+        var API_BASE = "https://apps-backend.abdulrahman-dogar.workers.dev";
         /* 3 s poll (was 1.5 s): the shared backend's free tier ran out
            of operations on 2026-11-08 and every room read/write started
            failing with 500s. Slower polling burns ~half the ops; the
@@ -1108,7 +1108,7 @@
            and Popular run against api.themoviedb.org; posters come from
            image.tmdb.org. Picking a title hands its TMDB id to
            playEmbedMovie() above. */
-        var TMDB_API_KEY = "PASTE_TMDB_KEY_HERE";
+        var TMDB_API_KEY = "16890f57fbd97da0e1f42fdd5c0a0d92";
         function tmdbFetch(path, statusText) {
           var st = $("tmdbStatus");
           if (!TMDB_API_KEY || TMDB_API_KEY === "PASTE_TMDB_KEY_HERE") {
