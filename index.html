@@ -615,6 +615,7 @@
         var roomState = null;         // last state we know (local cache)
         var seenChatKeys = {};        // dedupe chat echoes
         var prevPeerBuf = {};         // name -> bool, for buffering warnings
+        var firstPeerBufSeen = {};    // name -> ms the peer's flag first appeared (debounce)
         var renderedChat = 0;         // how many chat entries rendered
 
         var video = $("video");
@@ -895,11 +896,19 @@
               if (id === myId) return;
               var b = s.buf[id];
               var nowMs = Date.now();
-              if (b.on && !prevPeerBuf[b.name]) {
-                if (!lastPeerBufWarn[b.name] || nowMs - lastPeerBufWarn[b.name] > 60000) {
+              /* Debounce: a "waiting" blip fires on transient events
+                 (seek, tab refocus) even when the side is playing fine
+                 — the ?v=8 test saw two such false warnings. Only warn
+                 in chat when the flag has been on for 3 s straight. */
+              if (b.on) {
+                if (!prevPeerBuf[b.name]) firstPeerBufSeen[b.name] = nowMs;
+                if (firstPeerBufSeen[b.name] && nowMs - firstPeerBufSeen[b.name] > 3000 &&
+                    (!lastPeerBufWarn[b.name] || nowMs - lastPeerBufWarn[b.name] > 60000)) {
                   addSys(b.name + " is buffering — their connection is catching up", true);
                   lastPeerBufWarn[b.name] = nowMs;
                 }
+              } else {
+                delete firstPeerBufSeen[b.name];
               }
               prevPeerBuf[b.name] = !!b.on;
             });
@@ -1945,6 +1954,27 @@
         video.addEventListener("stalled", function () { setBuffering(true); });
         video.addEventListener("playing", function () { setBuffering(false); });
         video.addEventListener("canplay", function () { setBuffering(false); });
+
+        /* Playback watchdog: a browser throttles a background tab's
+           video WITHOUT ever firing "waiting" — the clock just stops
+           while the other side keeps playing. That is the sawtooth the
+           ?v=8 test saw (guest froze at 0:05→0:06 for 15 s, then jumped
+           ~20 s forward when the tab came back). If the video is
+           supposed to be playing but its clock has not advanced at
+           least half a second over 2 s of wall time, treat it as
+           buffering: the hold pauses both sides together and they
+           resume together from the held second. Background tabs still
+           run a 1 s timer, so this fires there too. */
+        var watchBaseline = { t: 0, wall: 0 };
+        setInterval(function () {
+          if (!myCode || !roomState) return;
+          if (video.paused || video.seeking) { watchBaseline = { t: video.currentTime || 0, wall: Date.now() }; return; }
+          var now = Date.now();
+          if (now - watchBaseline.wall < 2000) return;
+          var advanced = (video.currentTime || 0) - watchBaseline.t;
+          watchBaseline = { t: video.currentTime || 0, wall: now };
+          if (video.readyState >= 3 && advanced < 0.5) setBuffering(true);
+        }, 1000);
 
         /* ================= Controls =================
            Host only: the guest's buttons are disabled in enterRoom, and
