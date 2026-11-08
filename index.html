@@ -134,6 +134,7 @@
       .player-shell { background: #000; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; position: relative; }
       .video-wrap { position: relative; aspect-ratio: 16 / 9; background: #000; }
       .video-wrap video { width: 100%; height: 100%; display: block; background: #000; }
+      .sub-overlay{position:absolute;left:50%;bottom:56px;transform:translateX(-50%);max-width:88%;padding:6px 14px;border-radius:8px;background:rgba(0,0,0,.72);color:#fff;font-size:18px;line-height:1.45;text-align:center;pointer-events:none;z-index:6;white-space:pre-line}
       .empty-state {
         position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 8px; text-align: center; padding: 24px; color: var(--ink-2);
@@ -298,9 +299,8 @@
             <div id="panePlayer">
               <div class="player-shell" id="playerShell">
                 <div class="video-wrap" id="videoWrap">
-                  <video id="video" playsinline preload="auto" crossorigin="anonymous">
-                    <track id="subTrack" kind="subtitles" label="Subtitles" srclang="en" />
-                  </video>
+                  <video id="video" playsinline preload="auto"></video>
+                  <div id="subOverlay" class="sub-overlay" style="display:none"></div>
                   <div class="empty-state" id="emptyState">
                     <span class="big">NOTHING LOADED YET</span>
                     <span>Paste a direct video or stream link above and press Load.<br />It will start on everyone's screen at the same time.</span>
@@ -1056,10 +1056,12 @@
              immediate writes on play / pause / seek / hold, and the
              guest extrapolates from timeAt. A 3 s heartbeat burned
              ~1,200 KV writes/hour — over the free tier's 1,000/day in
-             a single movie. 30 s is plenty as a backstop. */
+             a single movie. 60 s is plenty as a backstop, and keeps a
+             two-hour movie night (~240 writes for two people) well
+             inside the daily limit. */
           hbTimer = setInterval(function () {
             if (currentMode === "video" && !video.paused) pushTime();
-          }, 30000);
+          }, 60000);
           /* In peer mode the guest pings every 5 s so the host keeps
              them counted as live; the host answers with state. */
           if (peerPingTimer) clearInterval(peerPingTimer);
@@ -1473,27 +1475,70 @@
 
         /* ================= Subtitles (per-side, via the Worker proxy) ==
            Each side loads their own subtitle file — different languages
-           per person is fine. The URL goes through /v1/sub so any host
+           per person is fine. The file goes through /v1/sub so any host
            works (no CORS problem) and .srt files are converted to
-           WebVTT server-side. The track is rebuilt (not just re-src'd)
-           because browsers do not reliably reload a track in place. */
-        var currentSubUrl = "";
-        function applySubtitle(url, lang) {
-          currentSubUrl = url || "";
-          var old = $("subTrack");
-          if (old) old.remove();
-          if (!url) return;
-          var track = document.createElement("track");
-          track.id = "subTrack";
-          track.kind = "subtitles";
-          track.label = "Subtitles";
-          track.srclang = lang || "en";
-          track.src = API_BASE + "/v1/sub?url=" + encodeURIComponent(url);
-          track.default = true;
-          video.appendChild(track);
-          try { track.mode = "showing"; } catch (e) {}
+           WebVTT server-side. The cues are rendered by hand in an
+           overlay div: the old <track> approach needed
+           crossorigin="anonymous" on the <video> tag, and that broke
+           EVERY video — none of our video hosts (media.w3.org,
+           archive.org, W3Schools) send CORS headers, so with
+           crossorigin set the video element refused to load anything
+           (the ?v=9 regression that killed playback in the ?v=10 and
+           ?v=11 tests). No crossorigin, no <track>: the video plays
+           everywhere again, and subtitles are just timed text. */
+        var subCues = [];
+        function parseVttTime(ts) {
+          var p = (ts || "").trim().split(":");
+          var s = 0;
+          if (p.length === 3) s = (+p[0]) * 3600 + (+p[1]) * 60 + parseFloat(p[2]);
+          else if (p.length === 2) s = (+p[0]) * 60 + parseFloat(p[1]);
+          return isFinite(s) ? s : 0;
         }
-        function clearSubtitle() { applySubtitle("", "en"); }
+        function parseVtt(text) {
+          var cues = [];
+          var blocks = (text || "").replace(/\r\n/g, "\n").replace(/^WEBVTT[^\n]*\n/, "").split(/\n\s*\n/);
+          blocks.forEach(function (block) {
+            var lines = block.split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l; });
+            if (!lines.length) return;
+            var i = lines[0].indexOf("-->") === -1 ? 1 : 0;
+            if (i >= lines.length) return;
+            var parts = lines[i].split("-->");
+            if (parts.length < 2) return;
+            var start = parseVttTime(parts[0]), end = parseVttTime(parts[1].split(" ")[0]);
+            var txt = lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "");
+            if (txt && end > start) cues.push({ start: start, end: end, text: txt });
+          });
+          cues.sort(function (a, b) { return a.start - b.start; });
+          return cues;
+        }
+        function renderSubtitle() {
+          var ov = $("subOverlay");
+          if (!ov) return;
+          if (!subCues.length) { ov.style.display = "none"; return; }
+          var t = video.currentTime || 0, cue = null;
+          for (var i = 0; i < subCues.length; i++) {
+            if (t >= subCues[i].start && t < subCues[i].end) { cue = subCues[i]; break; }
+            if (subCues[i].start > t) break;
+          }
+          if (cue) {
+            ov.textContent = cue.text;
+            ov.style.display = "";
+          } else ov.style.display = "none";
+        }
+        function applySubtitle(url, lang) {
+          if (!url) { clearSubtitle(); return; }
+          fetch(API_BASE + "/v1/sub?url=" + encodeURIComponent(url))
+            .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.text(); })
+            .then(function (text) {
+              subCues = parseVtt(text);
+              var ov = $("subOverlay");
+              if (ov) ov.setAttribute("lang", lang || "en");
+              if (!subCues.length) { addSys("Subtitles loaded, but no timed lines were found in that file.", true); return; }
+              renderSubtitle();
+            })
+            .catch(function () { addSys("Could not load that subtitle file — check the link and try again.", true); });
+        }
+        function clearSubtitle() { subCues = []; var ov = $("subOverlay"); if (ov) ov.style.display = "none"; }
         $("subLoadBtn").addEventListener("click", function () {
           var url = $("subUrl").value.trim();
           if (!url) return;
@@ -1503,6 +1548,8 @@
           clearSubtitle();
           $("subUrl").value = "";
         });
+        video.addEventListener("timeupdate", renderSubtitle);
+        video.addEventListener("seeked", renderSubtitle);
         /* ================= Embed movie servers (TMDB + VidSrc & co.) ====
            CineHD gives no API key, so the room uses the same pieces
            CineHD itself is built from: TMDB for search/posters, and
