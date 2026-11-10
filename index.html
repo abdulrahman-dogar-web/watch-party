@@ -583,7 +583,7 @@
            partner, and why the two sides never sat on the same second. */
         var POLL_MS = 3000;
         var POLL_FAST_MS = 1000;
-        var PRESENCE_MS = 10000;
+        var PRESENCE_MS = 60000;
         var DRIFT_S = 0.5;
         var currentPollMs = POLL_MS;
         /* Principle: ONE driver only — the room creator. The guest never
@@ -1018,7 +1018,12 @@
               setTimeout(syncIcons, 400);
             }
 
-            // Presence heartbeat (our own member entry), every ~10s.
+            // Presence heartbeat (our own member entry), every ~60s.
+            // Was 10s: each touch is a full room-state KV PUT, so two
+            // people on a 2-hour movie burned ~1,440 writes — over the
+            // free tier's 1,000 writes/day. Members count as live for
+            // 90s after their last `seen`, so 60s keeps the count right
+            // with 30s to spare, at ~240 writes for the same movie.
             if (now - lastPresencePut > PRESENCE_MS) touchPresence();
 
             // Adaptive poll speed: fast while playing / holding /
